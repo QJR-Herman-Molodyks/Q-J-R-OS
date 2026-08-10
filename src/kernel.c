@@ -17,7 +17,7 @@ static int shift_pressed = 0;
 
 // os info
 static char name[] = "Q-J-R OS";
-static char version[] = "v1.3";
+static char version[] = "v1.4";
 
 // architecture
 
@@ -231,6 +231,55 @@ void reboot(void)
     }
 }
 
+// time
+
+unsigned char cmos_read(unsigned char reg)
+{
+    unsigned char value;
+
+    __asm__ volatile (
+        "outb %0, $0x70"
+        :
+        : "a"(reg)
+    );
+
+    __asm__ volatile (
+        "inb $0x71, %0"
+        : "=a"(value)
+    );
+
+    return value;
+}
+
+unsigned char bcd_to_bin(unsigned char value)
+{
+    return (value & 0x0F) + ((value >> 4) * 10);
+}
+
+void print_two_digits(unsigned char value)
+{
+    put_char('0' + value / 10);
+    put_char('0' + value % 10);
+}
+
+static void print_time(void)
+{
+    unsigned char hours   = bcd_to_bin(cmos_read(0x04));
+    unsigned char minutes = bcd_to_bin(cmos_read(0x02));
+    unsigned char seconds = bcd_to_bin(cmos_read(0x00));
+
+    print("Time > ");
+
+    print_two_digits(hours);
+    put_char(':');
+    print_two_digits(minutes);
+    put_char(':');
+    print_two_digits(seconds);
+
+    put_char('\n');
+}
+
+
 // command execution
 static void execute_command(void)
 {
@@ -245,6 +294,7 @@ static void execute_command(void)
         print("  reboot - reboot system\n");
         print("  exit   - halt system\n");
         print("\n");
+        print("  time   - show current time\n");
         print("  info   - show system info\n");
         print("  calc   - calculator\n");
     } else if (strcmp(input, "exit") == 0) {
@@ -269,6 +319,8 @@ static void execute_command(void)
 
         print("\n");
 
+    } else if (strcmp(input, "time") == 0) {
+        print_time();
     } else if (strcmp(input, "reboot") == 0) {
         print("Rebooting...\n");
         update_cursor();

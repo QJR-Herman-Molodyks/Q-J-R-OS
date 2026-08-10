@@ -70,7 +70,7 @@ int pow(int a, int b) {
 }
 
 void calculator(void) {
-    print("=== Welcome to Q-J-R OS calculator v1.0 ===\n");
+    print("=== Welcome to Q-J-R OS calculator v1.1 ===\n");
 
     char expression[64];
 
@@ -165,10 +165,11 @@ void calculator(void) {
 
     } else {
         print("Error: Please use these operators:\n");
-        print("+ -> Addition\n");
-        print("- -> Subtraction\n");
-        print("* -> Multiplication\n");
-        print("/ -> Division\n");
-        print("** -> Power\n");
+        print(" +  -> Addition\n");
+        print(" -  -> Subtraction\n");
+        print(" *  -> Multiplication\n");
+        print(" /  -> Division\n");
+        print(" ** -> Power\n");
+        print("Usage: <number1><operator><number2>\n");
     }
 }
