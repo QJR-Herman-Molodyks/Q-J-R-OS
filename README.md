@@ -20,6 +20,7 @@
 5. Information View - info
 6. Calculator - calc
 7. BIOS Time - time
+8. Printing Text - echo
 
 ### Compilation
 
