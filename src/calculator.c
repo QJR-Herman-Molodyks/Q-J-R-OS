@@ -173,3 +173,100 @@ void calculator(void) {
         print("Usage: <number1><operator><number2>\n");
     }
 }
+
+// calculator API
+void calc(char* expression) {
+
+    char* first_num_str = expression;
+    int i = 0;
+
+    while (expression[i] != '+' &&
+           expression[i] != '-' &&
+           expression[i] != '*' &&
+           expression[i] != '/' &&
+           expression[i] != '\0') {
+        i++;
+    }
+
+    if (expression[i] == '+') {
+        int a = string_to_int(first_num_str);
+        int b = string_to_int(&expression[i + 1]);
+
+        int result = add(a, b);
+
+        print("Result > ");
+        print_int(result);
+        print("\n");
+
+    } else if (expression[i] == '-') {
+
+        int a = string_to_int(first_num_str);
+        int b = string_to_int(&expression[i + 1]);
+
+        int result = sub(a, b);
+
+        print("Result > ");
+        print_int(result);
+        print("\n");
+
+
+    } else if (expression[i] == '*') {
+        int a = string_to_int(first_num_str);
+
+        if (expression[i + 1] == '*') {
+            int b = string_to_int(&expression[i + 2]);
+
+            int result = pow(a, b);
+
+            print("Result > ");
+            print_int(result);
+            print("\n");
+        } else {
+            int b = string_to_int(&expression[i + 1]);
+
+            int result = mul(a, b);
+
+            print("Result > ");
+            print_int(result);
+            print("\n");
+        }
+
+    } else if (expression[i] == '/') {
+
+        int a = string_to_int(first_num_str);
+        int b = string_to_int(&expression[i + 1]);
+
+        if (b == 0) {
+            print("Result > Infinity\n");
+        } else {
+            int result = div(a, b);
+
+            print("Result > ");
+            print_int(result);
+            print("\n");
+        }
+    } else if (expression[i] == '^') {
+
+        int a = string_to_int(first_num_str);
+        int b = string_to_int(&expression[i + 1]);
+
+        if (b == 0) {
+            print("Result > Infinity\n");
+        } else {
+            int result = pow(a, b);
+
+            print("Result > ");
+            print_int(result);
+            print("\n");
+    }
+
+    } else {
+        print("Error: Please use these operators:\n");
+        print(" +  -> Addition\n");
+        print(" -  -> Subtraction\n");
+        print(" *  -> Multiplication\n");
+        print(" /  -> Division\n");
+        print(" ** -> Power\n");
+        print("Usage: calc <number1><operator><number2>\n");
+    }
+}

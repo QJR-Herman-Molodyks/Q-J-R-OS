@@ -5,8 +5,10 @@
 #define INPUT_SIZE 64
 
 extern void calculator(void);
+extern void calc(char* expression);
 
 char input[INPUT_SIZE];
+static char cut_text_buffer[INPUT_SIZE];
 
 static int input_pos = 0;
 
@@ -17,11 +19,15 @@ static int shift_pressed = 0;
 
 // os info
 static char name[] = "Q-J-R OS";
-static char version[] = "v1.4";
+static char version[] = "v1.5";
 
 // architecture
 
 int max_32bit = 2147483647;
+
+// timezone
+
+// int timezone = 0;
 
 // static unsigned char color = 0x07;
 static unsigned char color = 0x1F;
@@ -279,6 +285,76 @@ static void print_time(void)
     put_char('\n');
 }
 
+int len(const char* text) {
+    int length = 0;
+
+    for (int i = 0; text[i] != '\0'; i++) {
+        length++;
+    }
+
+    return length;
+}
+
+char* cut_text(const char* text, int index_start, int index_end) {
+    int text_length = len(text);
+
+    if (index_start < 0)
+        index_start = 0;
+
+    if (index_end >= text_length)
+        index_end = text_length - 1;
+
+    if (index_start > index_end)
+        return "";
+
+    int j = 0;
+
+    for (int i = index_start; i <= index_end; i++) {
+        cut_text_buffer[j++] = text[i];
+    }
+
+    cut_text_buffer[j] = '\0';
+
+    return cut_text_buffer;
+}
+
+int get_first_space_index(const char* text) {
+    int place = 0;
+    while (text[place] != ' ' && text[place] != '\0') {
+        place++;
+    }
+
+    if (place >= len(text)) {
+        return -1;
+    } else {
+        return place;
+    }
+}
+
+int startswith(const char* text, const char* prefix) {
+    int matched = 0;
+    for (int i = 0; i <= len(prefix); i++) {
+        if (text[i] == prefix[i]) {
+            matched++;
+        }
+    }
+
+    if (matched == len(prefix)) {
+        return 1;
+    } else {
+        return 0;
+    }
+}
+
+char* get_arg(const char* text) {
+    int space = get_first_space_index(text);
+
+    if (space == -1) {
+        return "";
+    }
+
+    return cut_text(text, space + 1, len(text) - 1);
+}
 
 // command execution
 static void execute_command(void)
@@ -297,6 +373,10 @@ static void execute_command(void)
         print("  time   - show current time\n");
         print("  info   - show system info\n");
         print("  calc   - calculator\n");
+        print("\n");
+        print("  echo   - echo text\n");
+//        print("\n");
+//        print("  tz     - set a timezone\n");
     } else if (strcmp(input, "exit") == 0) {
         print("System halted.");
         update_cursor();
@@ -321,14 +401,31 @@ static void execute_command(void)
 
     } else if (strcmp(input, "time") == 0) {
         print_time();
+//    } else if (strcmp(input, "tz") == 0) {
+//        input_text("Set your timezone",
+//                    timezone,
+//                    sizeof(timezone)
+//        );
+    } else if (startswith(input, "echo") == 1) {
+        print(get_arg(input));
+
     } else if (strcmp(input, "reboot") == 0) {
         print("Rebooting...\n");
         update_cursor();
         reboot();
     } else if (strcmp(input, "calc") == 0) {
         calculator();
+
+    } else if (startswith(input, "calc") == 1) {
+        char* arg = get_arg(input);
+        if (arg != 0) {
+            calc(arg);
+        }
     } else if (strcmp(input, "") == 0) {
         print("");
+    // stub
+    } else if (strcmp(input, "echo") == 0) {
+        print("echo: Use echo <text> to print anything to the screen!\n");
     } else {
         print("Unknown command.");
     }
