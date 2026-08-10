@@ -19,6 +19,7 @@
 4. System Reboot - reboot
 5. Information View - info
 6. Calculator - calc
+7. BIOS Time - time
 
 ### Compilation
 
