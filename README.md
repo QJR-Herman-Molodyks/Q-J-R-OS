@@ -49,8 +49,8 @@
 **Floopy**         : No   
 
 **OS**             : Q-J-R OS   
-**Version**        : 1.3   
-**Kernel**         : Q-J-R OS Kernel v1.3    
+**Version**        : 1.5    
+**Kernel**         : Q-J-R OS Kernel v1.5    
 **Kernel Type**    : Monolithic Kernel (Not fully)   
 **Release Date**   : 2026-08-09  
 
