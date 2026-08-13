@@ -270,6 +270,7 @@ void calc(char* expression) {
         print_int(result);
         print("\n");
 
+
     } else {
         print("Error: Please use these operators:\n");
         print(" +  -> Addition\n");
