@@ -69,6 +69,19 @@ int pow(int a, int b) {
     return result;
 }
 
+int rmn(int a, int b) {
+    while (a >= b) {
+        a = a - b;
+    }
+
+    if (a == 0) {
+        return 0;
+    } else {
+        return b - a;
+    }
+
+}
+
 void calculator(void) {
     print("=== Welcome to Q-J-R OS calculator v1.1 ===\n");
 
@@ -87,6 +100,7 @@ void calculator(void) {
            expression[i] != '-' &&
            expression[i] != '*' &&
            expression[i] != '/' &&
+           expression[i] != '%' &&
            expression[i] != '\0') {
         i++;
     }
@@ -148,20 +162,18 @@ void calculator(void) {
             print_int(result);
             print("\n");
         }
-    } else if (expression[i] == '^') {
+    } else if (expression[i] == '%') {
 
         int a = string_to_int(first_num_str);
         int b = string_to_int(&expression[i + 1]);
 
-        if (b == 0) {
-            print("Result > Infinity\n");
-        } else {
-            int result = pow(a, b);
+        int result = rmn(a, b);
 
-            print("Result > ");
-            print_int(result);
-            print("\n");
-    }
+        print("Result > ");
+        print_int(result);
+        print("\n");
+
+
 
     } else {
         print("Error: Please use these operators:\n");
@@ -169,6 +181,7 @@ void calculator(void) {
         print(" -  -> Subtraction\n");
         print(" *  -> Multiplication\n");
         print(" /  -> Division\n");
+        print(" %  -> Remainder\n");
         print(" ** -> Power\n");
         print("Usage: <number1><operator><number2>\n");
     }
@@ -184,6 +197,7 @@ void calc(char* expression) {
            expression[i] != '-' &&
            expression[i] != '*' &&
            expression[i] != '/' &&
+           expression[i] != '%' &&
            expression[i] != '\0') {
         i++;
     }
@@ -245,20 +259,18 @@ void calc(char* expression) {
             print_int(result);
             print("\n");
         }
-    } else if (expression[i] == '^') {
+    } else if (expression[i] == '%') {
 
         int a = string_to_int(first_num_str);
         int b = string_to_int(&expression[i + 1]);
 
-        if (b == 0) {
-            print("Result > Infinity\n");
-        } else {
-            int result = pow(a, b);
+        int result = rmn(a, b);
 
-            print("Result > ");
-            print_int(result);
-            print("\n");
-    }
+        print("Result > ");
+        print_int(result);
+        print("\n");
+
+
 
     } else {
         print("Error: Please use these operators:\n");
@@ -266,7 +278,8 @@ void calc(char* expression) {
         print(" -  -> Subtraction\n");
         print(" *  -> Multiplication\n");
         print(" /  -> Division\n");
+        print(" %  -> Remainder\n");
         print(" ** -> Power\n");
-        print("Usage: calc <number1><operator><number2>\n");
+        print("Usage: <number1><operator><number2>\n");
     }
 }

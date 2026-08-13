@@ -19,7 +19,7 @@ static int shift_pressed = 0;
 
 // os info
 static char name[] = "Q-J-R OS";
-static char version[] = "v1.5";
+static char version[] = "v1.5.1";
 
 // architecture
 
