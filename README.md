@@ -72,5 +72,5 @@
 **Virtual Machine**: QEMU (i386)
 
 **Supports Compilation**: macOS, GNU/Linux   
-**Code**                : Open-Source (Free Software)
+**Code**                : Open-Source (Free Software)  
 **License**             : GPL-3.0 (GNU General Public License v.0)
