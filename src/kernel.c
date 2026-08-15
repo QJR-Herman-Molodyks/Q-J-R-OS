@@ -4,9 +4,19 @@
 #define VGA_HEIGHT 25
 #define INPUT_SIZE 64
 
+// calculator
 extern void calculator(void);
 extern void calc(char* expression);
 
+// ATA
+extern void init_ata(void);
+extern void ata_ls(void);
+
+extern void ata_write(char* filename);
+extern void ata_read(char* filename);
+extern void ata_delete(char* filename);
+
+// config and DB vars
 char input[INPUT_SIZE];
 static char cut_text_buffer[INPUT_SIZE];
 
@@ -19,7 +29,7 @@ static int shift_pressed = 0;
 
 // os info
 static char name[] = "Q-J-R OS";
-static char version[] = "v1.5.1";
+static char version[] = "2.0";
 
 // architecture
 
@@ -163,7 +173,7 @@ void clear_screen(void)
     cursor_y = 0;
 }
 
-static int strcmp(const char* a, const char* b) {
+int strcmp(const char* a, const char* b) {
     while (*a && *a == *b) {
         a++;
         b++;
@@ -375,6 +385,13 @@ static void execute_command(void)
         print("  calc   - calculator\n");
         print("\n");
         print("  echo   - echo text\n");
+        print("\n");
+        print("  ata    - init ata\n");
+        print("  ls     - get list of files\n");
+        print("  write  - write to file\n");
+        print("  read   - read from file\n");
+        print("  del    - delete file\n");
+        print("\n");
 //        print("\n");
 //        print("  tz     - set a timezone\n");
     } else if (strcmp(input, "exit") == 0) {
@@ -423,6 +440,29 @@ static void execute_command(void)
         }
     } else if (strcmp(input, "") == 0) {
         print("");
+
+	// ATA
+    } else if (strcmp(input, "ata") == 0) {
+        init_ata();
+    } else if (strcmp(input, "ls") == 0) {
+        ata_ls();
+
+	} else if (startswith(input, "write") == 1) {
+		char* arg = get_arg(input);
+		if (arg != 0) {
+			ata_write(arg);
+		}
+	} else if (startswith(input, "read") == 1) {
+		char* arg = get_arg(input);
+		if (arg != 0) {
+			ata_read(arg);
+		}
+	} else if (startswith(input, "del") == 1) {
+		char* arg = get_arg(input);
+		if (arg != 0) {
+			ata_delete(arg);
+		}
+
     // stub
     } else if (strcmp(input, "echo") == 0) {
         print("echo: Use echo <text> to print anything to the screen!\n");

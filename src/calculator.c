@@ -271,6 +271,7 @@ void calc(char* expression) {
         print("\n");
 
 
+
     } else {
         print("Error: Please use these operators:\n");
         print(" +  -> Addition\n");

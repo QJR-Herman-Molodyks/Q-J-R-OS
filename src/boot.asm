@@ -13,8 +13,9 @@ start:
 
     mov [boot_drive], dl
 
+    ; Завантажуємо kernel починаючи з сектора 2
     mov ah, 0x02
-    mov al, 16              
+    mov al, 32              ; 32 сектори
     mov ch, 0
     mov cl, 2
     mov dh, 0
@@ -25,12 +26,12 @@ start:
 
     jc disk_error
 
-    ; Enabling A20
+    ; Увімкнення A20
     in al, 0x92
     or al, 00000010b
     out 0x92, al
 
-    ; Loading GDT
+    ; Завантаження GDT
     lgdt [gdt_descriptor]
 
     ; Protected Mode
