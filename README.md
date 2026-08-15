@@ -66,7 +66,7 @@
 **Kernel Type**    : Monolithic Kernel (Not fully)   
 **Release Date**   : 2026-08-15   
 
-**Disk Image Size**: 65536 KB
+**Disk Image Size**: 65536 KB   
 **Disk Image**     : .img
 
 **Virtual Machine**: QEMU (i386)
