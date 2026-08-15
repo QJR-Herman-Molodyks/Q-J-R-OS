@@ -61,9 +61,9 @@
 **Floopy**         : No   
 
 **OS**             : Q-J-R OS   
-**Version**        : 2.0    
-**Kernel**         : Q-J-R OS Kernel v2.0    
-**Kernel Type**    : Monolithic Kernel (Not fully)     
+**Version**        : 2.0  
+**Kernel**         : Q-J-R OS Kernel v2.0  
+**Kernel Type**    : Monolithic Kernel (Not fully)    
 **Release Date**   : 2026-08-15     
 
 **Disk Image Size**: 65536 KB   
