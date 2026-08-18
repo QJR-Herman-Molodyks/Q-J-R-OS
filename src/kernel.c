@@ -16,33 +16,32 @@ extern void ata_write(char* filename);
 extern void ata_read(char* filename);
 extern void ata_delete(char* filename);
 
+extern void ata_stat(char* filename);
+
+// Writer
+extern void writer_open(const char* filename);
+
 // config and DB vars
 char input[INPUT_SIZE];
 static char cut_text_buffer[INPUT_SIZE];
 
-static int input_pos = 0;
+int input_pos = 0;
 
-static int cursor_x = 0;
-static int cursor_y = 0;
+int cursor_x = 0;
+int cursor_y = 0;
 
-static int shift_pressed = 0;
+int shift_pressed = 0;
 
 // os info
 static char name[] = "Q-J-R OS";
-static char version[] = "2.0";
+static char version[] = "2.0.1";
 
 // architecture
-
 int max_32bit = 2147483647;
 
-// timezone
+unsigned char color = 0x1F;
 
-// int timezone = 0;
-
-// static unsigned char color = 0x07;
-static unsigned char color = 0x1F;
-
-static const char keyboard_map[] = {
+const char keyboard_map[] = {
     0,
     0,
     '1', '2', '3', '4', '5', '6', '7', '8', '9', '0',
@@ -73,7 +72,7 @@ static const char keyboard_map[] = {
     ' '
 };
 
-static const char keyboard_map_upper[] = {
+const char keyboard_map_upper[] = {
     0,
     0,
     '!', '@', '#', '$', '%', '^', '&', '*', '(', ')',
@@ -105,12 +104,11 @@ static const char keyboard_map_upper[] = {
 };
 
 // Scroll down
-
 void scroll_down(void) {
-        for (int y = 1; y < VGA_HEIGHT; y++) {
-            for (int x = 0; x < VGA_WIDTH; x++) {
-                VGA_MEMORY[(y - 1) * VGA_WIDTH + x] =
-                    VGA_MEMORY[y * VGA_WIDTH + x];
+    for (int y = 1; y < VGA_HEIGHT; y++) {
+        for (int x = 0; x < VGA_WIDTH; x++) {
+            VGA_MEMORY[(y - 1) * VGA_WIDTH + x] =
+                VGA_MEMORY[y * VGA_WIDTH + x];
         }
     }
 
@@ -145,11 +143,9 @@ void put_char(char c)
     }
 
     if (cursor_y >= VGA_HEIGHT) {
-        // cursor_y = 0;
         scroll_down();
     }
 }
-
 
 void print(const char* str)
 {
@@ -158,7 +154,6 @@ void print(const char* str)
         str++;
     }
 }
-
 
 void clear_screen(void)
 {
@@ -181,7 +176,6 @@ int strcmp(const char* a, const char* b) {
 
     return *(unsigned char*)a - *(unsigned char*)b;
 }
-
 
 void update_cursor(void) {
     unsigned short position =
@@ -219,14 +213,12 @@ void update_cursor(void) {
 }
 
 // reboot
-
 void reboot(void)
 {
     __asm__ volatile ("cli");
 
     unsigned char status;
 
-    // Waiting while controller will be ready to accept the command
     do {
         __asm__ volatile (
             "inb $0x64, %0"
@@ -234,7 +226,6 @@ void reboot(void)
         );
     } while (status & 0x02);
 
-    // Command reset CPU
     __asm__ volatile (
         "outb %0, %1"
         :
@@ -248,7 +239,6 @@ void reboot(void)
 }
 
 // time
-
 unsigned char cmos_read(unsigned char reg)
 {
     unsigned char value;
@@ -366,6 +356,26 @@ char* get_arg(const char* text) {
     return cut_text(text, space + 1, len(text) - 1);
 }
 
+unsigned char keyboard_read(void) {
+    unsigned char status;
+
+    do {
+        __asm__ volatile (
+            "inb $0x64, %0"
+            : "=a"(status)
+        );
+    } while (!(status & 1));
+
+    unsigned char scancode;
+
+    __asm__ volatile (
+        "inb $0x60, %0"
+        : "=a"(scancode)
+    );
+
+    return scancode;
+}
+
 // command execution
 static void execute_command(void)
 {
@@ -391,9 +401,8 @@ static void execute_command(void)
         print("  write  - write to file\n");
         print("  read   - read from file\n");
         print("  del    - delete file\n");
+        print("  stat   - show file information\n");
         print("\n");
-//        print("\n");
-//        print("  tz     - set a timezone\n");
     } else if (strcmp(input, "exit") == 0) {
         print("System halted.");
         update_cursor();
@@ -418,11 +427,6 @@ static void execute_command(void)
 
     } else if (strcmp(input, "time") == 0) {
         print_time();
-//    } else if (strcmp(input, "tz") == 0) {
-//        input_text("Set your timezone",
-//                    timezone,
-//                    sizeof(timezone)
-//        );
     } else if (startswith(input, "echo") == 1) {
         print(get_arg(input));
 
@@ -441,29 +445,33 @@ static void execute_command(void)
     } else if (strcmp(input, "") == 0) {
         print("");
 
-	// ATA
+    // ATA
     } else if (strcmp(input, "ata") == 0) {
         init_ata();
     } else if (strcmp(input, "ls") == 0) {
         ata_ls();
 
-	} else if (startswith(input, "write") == 1) {
-		char* arg = get_arg(input);
-		if (arg != 0) {
-			ata_write(arg);
-		}
-	} else if (startswith(input, "read") == 1) {
-		char* arg = get_arg(input);
-		if (arg != 0) {
-			ata_read(arg);
-		}
-	} else if (startswith(input, "del") == 1) {
-		char* arg = get_arg(input);
-		if (arg != 0) {
-			ata_delete(arg);
-		}
+    } else if (startswith(input, "write") == 1) {
+       char* arg = get_arg(input);
+       if (arg != 0) {
+          writer_open(arg);
+       }
+    } else if (startswith(input, "read") == 1) {
+       char* arg = get_arg(input);
+       if (arg != 0) {
+          ata_read(arg);
+       }
+    } else if (startswith(input, "del") == 1) {
+       char* arg = get_arg(input);
+       if (arg != 0) {
+          ata_delete(arg);
+       }
+    } else if (startswith(input, "stat") == 1) {
+        char* arg = get_arg(input);
 
-    // stub
+        if (arg != 0) {
+            ata_stat(arg);
+        }
     } else if (strcmp(input, "echo") == 0) {
         print("echo: Use echo <text> to print anything to the screen!\n");
     } else {
@@ -474,26 +482,6 @@ static void execute_command(void)
 
     print("\nQ-J-R OS> ");
     update_cursor();
-}
-
-static unsigned char keyboard_read(void) {
-    unsigned char status;
-
-    do {
-        __asm__ volatile (
-            "inb $0x64, %0"
-            : "=a"(status)
-        );
-    } while (!(status & 1));
-
-    unsigned char scancode;
-
-    __asm__ volatile (
-        "inb $0x60, %0"
-        : "=a"(scancode)
-    );
-
-    return scancode;
 }
 
 void input_text(const char* prompt, char* buffer, int buffer_size)
@@ -580,17 +568,12 @@ static void keyboard_process(void)
         return;
     }
 
-    // Key release
-
     if (scancode & 0x80)
         return;
 
     if (scancode >= sizeof(keyboard_map))
         return;
 
-    // char c = keyboard_map[scancode]; // STUB: OMG it doesn't work without that, sorry!!!
-
-    // key
     char c;
 
     if (shift_pressed) {
@@ -620,13 +603,6 @@ static void keyboard_process(void)
     if (c == '\n') {
         execute_command();
         return;
-
-        input_pos = 0;
-
-        print("\nQ-J-R OS> ");
-        update_cursor();
-
-        return;
     }
 
     if (input_pos < INPUT_SIZE - 1) {
@@ -650,7 +626,6 @@ void kernel_main(void)
     update_cursor();
 
     while (1) {
-        // __asm__ volatile ("hlt");
         keyboard_process();
     }
 }

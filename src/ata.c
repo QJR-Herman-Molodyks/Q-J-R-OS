@@ -506,11 +506,7 @@ static int fat16_create_root_entry(
          sector < root_dir_sectors;
          sector++) {
 
-        if (!ata_read_sector(
-                ATA_DRIVE_SLAVE,
-                root_dir_start + sector,
-                buffer)) {
-
+        if (!ata_read_sector(ATA_DRIVE_SLAVE, root_dir_start + sector, buffer)) {
             print("FAT16: Directory read error\n");
             return 0;
         }
@@ -776,187 +772,7 @@ void ata_ls(void) { // maybe path in args, don't know
          }
 }
 
-// command: write <filename>
-void ata_write(char* filename) {
-    // here will be a simple text editor:
-    // keys:
-    // ESC - Exit
-    // F1  - Save
-    //
-    // That's gonna look like that:
-    // Q-J-R OS Writer v1.0: <filename>: ESC = Exit; F1 = Save.
-    // ~ Hello
-    // ~ World_
-
-    // This is fully CLI text editor (with input lines)
-    if (fat16.bytes_per_sector == 0) {
-        print("FAT16: Not mounted\n");
-        return;
-    }
-
-    if (filename == 0 || filename[0] == '\0') {
-        print("Usage: write <filename>\n");
-        return;
-    }
-
-    // print("FAT16: Searching free cluster...\n");
-
-    // unsigned short cluster = fat16_find_free_cluster();
-
-    // if (cluster == 0) {
-    //    print("FAT16: No free clusters\n");
-    //    return;
-    // }
-
-    // print("FAT16: Free cluster found\n");
-
-    // if (!fat16_set_cluster(cluster,FAT16_CLUSTER_EOF)) {
-    //    print("FAT16: Failed to allocate cluster\n");
-    //    return;
-    // }
-
-    // print("FAT16: Cluster allocated\n");
-
-	print("FAT16: Preparing data...\n");
-
-	const char* text =
-    	"Q-J-R OS FAT16 MULTI-CLUSTER TEST\n"
-    	"Cluster chain works correctly!\n"
-    	"LETS GOOOOOOOOOOOO!!!!!\n";
-
-	unsigned int text_length = 0;
-
-	while (text[text_length] != '\0')
-    	text_length++;
-
-	unsigned int cluster_size =
-    	(unsigned int)fat16.bytes_per_sector *
-    	fat16.sectors_per_cluster;
-
-	unsigned int cluster_count =
-    	(text_length + cluster_size - 1) /
-    	cluster_size;
-
-	if (cluster_count == 0)
-    	cluster_count = 1;
-
-	print("FAT16: Allocating cluster chain...\n");
-
-	unsigned short cluster =
-    	fat16_allocate_cluster_chain(cluster_count);
-
-	if (cluster == 0) {
-    	print("FAT16: Failed to allocate cluster chain\n");
-    	return;
-	}
-
-	print("FAT16: Cluster chain allocated\n");
-
-	// unsigned char data[2048];
-
-	// for (int i = 0; i < 2048; i++)
-    //	data[i] = 0;
-
-	// const char* text = "Hello from Q-J-R OS!";
-
-	// int text_length = 0;
-
-	// while (text[text_length] != '\0')
-    //	text_length++;
-
-	// for (int i = 0; i < text_length; i++)
-    //	data[i] = text[i];
-
-unsigned int data_start =
-    fat16.reserved_sectors +
-    ((unsigned int)fat16.fat_count *
-     fat16.sectors_per_fat) +
-    (((unsigned int)fat16.root_entries * 32 +
-      fat16.bytes_per_sector - 1) /
-     fat16.bytes_per_sector);
-
-unsigned short current_cluster = cluster;
-
-unsigned int text_offset = 0;
-
-while (current_cluster >= 2 &&
-       current_cluster < 0xFFF8 &&
-       text_offset < text_length) {
-
-    unsigned int cluster_sector =
-        data_start +
-        ((unsigned int)(current_cluster - 2) *
-         fat16.sectors_per_cluster);
-
-    for (unsigned int sector = 0;
-         sector < fat16.sectors_per_cluster &&
-         text_offset < text_length;
-         sector++) {
-
-        unsigned char data[512];
-
-        for (unsigned int i = 0; i < 512; i++)
-            data[i] = 0;
-
-        unsigned int remaining =
-            text_length - text_offset;
-
-        unsigned int bytes_to_write = 512;
-
-        if (remaining < bytes_to_write)
-            bytes_to_write = remaining;
-
-        for (unsigned int i = 0;
-             i < bytes_to_write;
-             i++) {
-
-            data[i] = text[text_offset + i];
-        }
-
-        if (!ata_write_sector(
-                ATA_DRIVE_SLAVE,
-                cluster_sector + sector,
-                data)) {
-
-            print("FAT16: Data write error\n");
-            return;
-        }
-
-        text_offset += bytes_to_write;
-    }
-
-    if (text_offset >= text_length)
-        break;
-
-    current_cluster =
-        fat16_get_next_cluster(current_cluster);
-
-    if (current_cluster == 0) {
-        print("FAT16: Invalid cluster chain\n");
-        return;
-    }
-}
-
-print("FAT16: Data written\n");
-
-if (!fat16_create_root_entry(
-        filename,
-        cluster,
-        (unsigned int)text_length)) {
-
-    print("FAT16: Failed to create file\n");
-    return;
-}
-
-print("FAT16: File created\n");
-}
-
-// command: read <filename>
-//void ata_read(char* filename) {
-    // reading filename:
-    // Content of <filename>:
-    // <content>
-//}
+// ATA: read <filename>
 
 void ata_read(char* filename)
 {
@@ -1186,6 +1002,265 @@ while (current_cluster >= 2 &&
 print("\n");
 }
 
+// command: stat <filename>
+void ata_stat(char* filename)
+{
+    if (fat16.bytes_per_sector == 0) {
+        print("FAT16: Not mounted\n");
+        return;
+    }
+
+    if (filename == 0 || filename[0] == '\0') {
+        print("Usage: stat <filename>\n");
+        return;
+    }
+
+    unsigned int root_dir_start =
+        fat16.reserved_sectors +
+        ((unsigned int)fat16.fat_count *
+         fat16.sectors_per_fat);
+
+    unsigned int root_dir_sectors =
+        ((unsigned int)fat16.root_entries * 32 +
+         fat16.bytes_per_sector - 1) /
+        fat16.bytes_per_sector;
+
+    unsigned char buffer[512];
+
+    unsigned short file_cluster = 0;
+    unsigned int file_size = 0;
+
+    char name[8];
+    char ext[3];
+
+    for (int i = 0; i < 8; i++)
+        name[i] = ' ';
+
+    for (int i = 0; i < 3; i++)
+        ext[i] = ' ';
+
+    int i = 0;
+    int j = 0;
+
+    while (filename[i] != '\0' &&
+           filename[i] != '.' &&
+           i < 8) {
+
+        char c = filename[i];
+
+        if (c >= 'a' && c <= 'z')
+            c -= 'a' - 'A';
+
+        name[i] = c;
+        i++;
+    }
+
+    if (filename[i] == '.') {
+        i++;
+
+        while (filename[i] != '\0' && j < 3) {
+            char c = filename[i];
+
+            if (c >= 'a' && c <= 'z')
+                c -= 'a' - 'A';
+
+            ext[j++] = c;
+            i++;
+        }
+    }
+
+    /*
+     * Search root directory.
+     */
+
+    for (unsigned int sector = 0;
+         sector < root_dir_sectors;
+         sector++) {
+
+        if (!ata_read_sector(
+                ATA_DRIVE_SLAVE,
+                root_dir_start + sector,
+                buffer)) {
+
+            print("FAT16: Directory read error\n");
+            return;
+        }
+
+        for (unsigned int offset = 0;
+             offset < fat16.bytes_per_sector;
+             offset += 32) {
+
+            unsigned char* entry = &buffer[offset];
+
+            if (entry[0] == 0x00)
+                break;
+
+            if (entry[0] == 0xE5)
+                continue;
+
+            if (entry[11] == 0x0F)
+                continue;
+
+            if (entry[11] & 0x08)
+                continue;
+
+            int match = 1;
+
+            for (int k = 0; k < 8; k++) {
+                if (entry[k] != (unsigned char)name[k]) {
+                    match = 0;
+                    break;
+                }
+            }
+
+            if (match) {
+                for (int k = 0; k < 3; k++) {
+                    if (entry[8 + k] !=
+                        (unsigned char)ext[k]) {
+
+                        match = 0;
+                        break;
+                    }
+                }
+            }
+
+            if (!match)
+                continue;
+
+            file_cluster =
+                entry[26] |
+                ((unsigned short)entry[27] << 8);
+
+            file_size =
+                entry[28] |
+                ((unsigned int)entry[29] << 8) |
+                ((unsigned int)entry[30] << 16) |
+                ((unsigned int)entry[31] << 24);
+
+            break;
+        }
+
+        if (file_cluster != 0)
+            break;
+    }
+
+    if (file_cluster == 0) {
+        print("FAT16: File not found\n");
+        return;
+    }
+
+    /*
+     * Count clusters.
+     */
+
+    unsigned int cluster_count = 0;
+    unsigned short current_cluster = file_cluster;
+
+    while (current_cluster >= 2 &&
+           current_cluster < 0xFFF8) {
+
+        cluster_count++;
+
+        unsigned short next_cluster =
+            fat16_get_next_cluster(current_cluster);
+
+        if (next_cluster == 0) {
+            print("FAT16: Invalid cluster chain\n");
+            return;
+        }
+
+        current_cluster = next_cluster;
+    }
+
+    print("Name: ");
+    print(filename);
+    print("\n");
+
+    print("Size: ");
+
+    char size_buffer[12];
+    unsigned int value = file_size;
+    int position = 0;
+
+    if (value == 0) {
+        size_buffer[position++] = '0';
+    } else {
+        char reverse[12];
+        int reverse_position = 0;
+
+        while (value > 0) {
+            reverse[reverse_position++] =
+                '0' + (value % 10);
+
+            value /= 10;
+        }
+
+        while (reverse_position > 0)
+            size_buffer[position++] =
+                reverse[--reverse_position];
+    }
+
+    size_buffer[position] = '\0';
+
+    print(size_buffer);
+    print(" bytes\n");
+
+    print("First cluster: ");
+
+    value = file_cluster;
+    position = 0;
+
+    if (value == 0) {
+        size_buffer[position++] = '0';
+    } else {
+        char reverse[12];
+        int reverse_position = 0;
+
+        while (value > 0) {
+            reverse[reverse_position++] =
+                '0' + (value % 10);
+
+            value /= 10;
+        }
+
+        while (reverse_position > 0)
+            size_buffer[position++] =
+                reverse[--reverse_position];
+    }
+
+    size_buffer[position] = '\0';
+
+    print(size_buffer);
+    print("\n");
+
+    print("Clusters: ");
+
+    value = cluster_count;
+    position = 0;
+
+    if (value == 0) {
+        size_buffer[position++] = '0';
+    } else {
+        char reverse[12];
+        int reverse_position = 0;
+
+        while (value > 0) {
+            reverse[reverse_position++] =
+                '0' + (value % 10);
+
+            value /= 10;
+        }
+
+        while (reverse_position > 0)
+            size_buffer[position++] =
+                reverse[--reverse_position];
+    }
+
+    size_buffer[position] = '\0';
+
+    print(size_buffer);
+    print("\n");
+}
 
 // command: del <filename>
 void ata_delete(char* filename)
@@ -1350,4 +1425,73 @@ void ata_delete(char* filename)
     }
 
     print("FAT16: File not found\n");
+}
+
+
+// command: write <filename>
+/* =========================================================================
+ * Writing a buffer of set size in a FAT16 File
+ * ========================================================================= */
+int fat16_write_buffer(const char* filename, const char* buffer, unsigned int text_length)
+{
+    if (fat16.bytes_per_sector == 0) {
+        return 0; // not mounted
+    }
+
+    if (!filename || filename[0] == '\0') {
+        return 0;
+    }
+
+    // If file or already exists -> delete old version and save new (NEED TO CHANGE)
+    ata_delete((char*)filename);
+
+    unsigned int cluster_size = (unsigned int)fat16.bytes_per_sector * fat16.sectors_per_cluster;
+    unsigned int cluster_count = (text_length + cluster_size - 1) / cluster_size;
+    if (cluster_count == 0) cluster_count = 1;
+
+    unsigned short cluster = fat16_allocate_cluster_chain(cluster_count);
+    if (cluster == 0) {
+        return 0;
+    }
+
+    unsigned int data_start =
+        fat16.reserved_sectors +
+        ((unsigned int)fat16.fat_count * fat16.sectors_per_fat) +
+        (((unsigned int)fat16.root_entries * 32 + fat16.bytes_per_sector - 1) / fat16.bytes_per_sector);
+
+    unsigned short current_cluster = cluster;
+    unsigned int text_offset = 0;
+
+    while (current_cluster >= 2 && current_cluster < 0xFFF8 && text_offset < text_length) {
+        unsigned int cluster_sector =
+            data_start + ((unsigned int)(current_cluster - 2) * fat16.sectors_per_cluster);
+
+        for (unsigned int sector = 0; sector < fat16.sectors_per_cluster && text_offset < text_length; sector++) {
+            unsigned char data[512];
+            for (unsigned int i = 0; i < 512; i++) data[i] = 0;
+
+            unsigned int remaining = text_length - text_offset;
+            unsigned int bytes_to_write = (remaining < 512) ? remaining : 512;
+
+            for (unsigned int i = 0; i < bytes_to_write; i++) {
+                data[i] = buffer[text_offset + i];
+            }
+
+            if (!ata_write_sector(ATA_DRIVE_SLAVE, cluster_sector + sector, data)) {
+                return 0;
+            }
+
+            text_offset += bytes_to_write;
+        }
+
+        if (text_offset >= text_length) break;
+        current_cluster = fat16_get_next_cluster(current_cluster);
+        if (current_cluster == 0) return 0;
+    }
+
+    if (!fat16_create_root_entry(filename, cluster, text_length)) {
+        return 0;
+    }
+
+    return 1; // Saved successfully
 }
