@@ -42,6 +42,19 @@ build:
 		-c src/ata.c \
 		-o build/ata.o
 
+	i686-elf-gcc \
+		-m32 \
+		-ffreestanding \
+		-fno-pie \
+		-fno-stack-protector \
+		-fno-builtin \
+		-nostdlib \
+		-nodefaultlibs \
+		-Wall \
+		-Wextra \
+		-c src/writer.c \
+		-o build/writer.o
+
 	nasm -f elf32 src/kernel_entry.asm \
 		-o build/kernel_entry.o
 
@@ -52,7 +65,8 @@ build:
 		build/kernel_entry.o \
 		build/kernel.o \
 		build/calculator.o \
-		build/ata.o
+		build/ata.o \
+		build/writer.o
 
 	i686-elf-objcopy \
 		-O binary \
