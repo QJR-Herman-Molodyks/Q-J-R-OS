@@ -1,4 +1,4 @@
-# Official Open-Source Q-J-R OS v2.0.1
+# Official Open-Source Q-J-R OS v2.0.2
 ## GNU Public License v3.0 (GPL-3.0)!
 
 ### Source Files:   
@@ -63,10 +63,10 @@
 **Floopy**         : No   
 
 **OS**             : Q-J-R OS   
-**Version**        : 2.0.1   
-**Kernel**         : Q-J-R OS Kernel v2.0.1    
+**Version**        : 2.0.2   
+**Kernel**         : Q-J-R OS Kernel v2.0.2    
 **Kernel Type**    : Monolithic Kernel (Not fully)    
-**Release Date**   : 2026-08-18     
+**Release Date**   : 2026-08-19     
 
 **Disk Image Size**: 65536 KB   
 **Disk Image**     : .img
