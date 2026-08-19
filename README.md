@@ -1,4 +1,4 @@
-# Official Open-Source Q-J-R OS v2.0
+# Official Open-Source Q-J-R OS v2.0.1
 ## GNU Public License v3.0 (GPL-3.0)!
 
 ### Source Files:   
@@ -8,9 +8,10 @@
 3. calculator.c
 4. kernel.c
 5. kernel_entry.asm
+6. writer.c   
 
-6. linker.ld
-7. Makefile
+7. linker.ld
+8. Makefile
 
 ### Features:
 
@@ -32,6 +33,7 @@
 11. Read file - read
 12. Write file - write
 13. Delete file - del
+14. File statistics - stat
 
 ### Compilation
 
@@ -55,16 +57,16 @@
 **Graphics**       : VGA Text Mode 80x25   
 
 **ATA Support**    : FAT16 ATA Chain Support   
-**SATA Support**   : No (temporary)  
+**SATA Support**   : No (temporary)
 **Filesystem**     : FAT16   
 
 **Floopy**         : No   
 
 **OS**             : Q-J-R OS   
-**Version**        : 2.0  
-**Kernel**         : Q-J-R OS Kernel v2.0  
+**Version**        : 2.0.1   
+**Kernel**         : Q-J-R OS Kernel v2.0.1    
 **Kernel Type**    : Monolithic Kernel (Not fully)    
-**Release Date**   : 2026-08-15     
+**Release Date**   : 2026-08-18     
 
 **Disk Image Size**: 65536 KB   
 **Disk Image**     : .img
