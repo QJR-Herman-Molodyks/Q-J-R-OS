@@ -1,0 +1,18 @@
+
+1. Filesystem
+    1.1. Add possibility to create directories and delete directories
+    1.2. Possibility to change directories
+    1.3. Add feature to copy, move, rename
+
+2. Writer
+    2.1. Add scrolling feature [+]
+    2.2. Add posibility to TAB
+    2.3. Add stylization
+    2.4. Add auto-saving
+    2.5. Arrows -> change cursor position
+
+3. Optional
+    3.1. Filesystem
+        3.1.1. Add possibility to format the disk
+        3.1.2. Add possibility to change (switch) the drive/partitions
+

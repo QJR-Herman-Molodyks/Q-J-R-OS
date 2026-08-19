@@ -6,6 +6,10 @@
 #define VGA_HEIGHT 25
 #define WRITER_MAX_TEXT 16384
 
+#define WRITER_VIEW_TOP    1
+#define WRITER_VIEW_BOTTOM (VGA_HEIGHT - 2)
+#define WRITER_VIEW_HEIGHT (WRITER_VIEW_BOTTOM - WRITER_VIEW_TOP + 1)
+
 #define KEY_ESC 27
 #define KEY_F1  0x3B
 
@@ -69,6 +73,7 @@ static unsigned char writer_get_key(void) {
 static char writer_text[WRITER_MAX_TEXT];
 static unsigned int writer_length = 0;
 static unsigned int writer_cursor = 0;
+static unsigned int writer_scroll_row = 0;
 static char* status_msg = "";
 
 
@@ -89,41 +94,68 @@ static void writer_render(const char* filename) {
     // 1. Заголовок (Header)
     cursor_x = 0;
     cursor_y = 0;
-    print(" [Q-J-R Writer v2.0] | ");
+    print("| [Q-J-R Writer v2.0.1] | ");
     print(filename);
     print(" | [ESC] Exit  [F1] Save\n");
 
-    int screen_x = 0;
-    int screen_y = 1;
-    int cur_x = 0;
-    int cur_y = 1;
+    // 2. Текст (Text)
+    int cursor_v_x = 0;
+    int cursor_v_y = 0;
+    int cur_vx = 0;
+    int cur_vy = 0;
 
-    // 2. Текст
     for (unsigned int i = 0; i < writer_length; i++) {
         if (i == writer_cursor) {
-            cur_x = screen_x;
-            cur_y = screen_y;
+            cursor_v_x = cur_vx;
+            cursor_v_y = cur_vy;
         }
 
         if (writer_text[i] == '\n') {
-            screen_x = 0;
-            screen_y++;
+            cur_vx = 0;
+            cur_vy++;
         } else {
-            if (screen_y < VGA_HEIGHT - 1) {
-                ((volatile unsigned short*)0xB8000)[screen_y * VGA_WIDTH + screen_x] =
-                    ((unsigned short)color << 8) | (unsigned char)writer_text[i];
-            }
-            screen_x++;
-            if (screen_x >= VGA_WIDTH) {
-                screen_x = 0;
-                screen_y++;
+            cur_vx++;
+            if (cur_vx >= VGA_WIDTH) {
+                cur_vx = 0;
+                cur_vy++;
             }
         }
     }
 
     if (writer_cursor == writer_length) {
-        cur_x = screen_x;
-        cur_y = screen_y;
+        cursor_v_x = cur_vx;
+        cursor_v_y = cur_vy;
+    }
+
+    // start scrolling process
+    if (cursor_v_y < (int)writer_scroll_row) {
+        writer_scroll_row = cursor_v_y;
+    }
+    if (cursor_v_y >= (int)(writer_scroll_row + WRITER_VIEW_HEIGHT)) {
+        writer_scroll_row = cursor_v_y - WRITER_VIEW_HEIGHT + 1;
+    }
+
+    // drawing text after scrolling
+    cur_vx = 0;
+    cur_vy = 0;
+
+    for (unsigned int i = 0; i < writer_length; i++) {
+        int screen_y = WRITER_VIEW_TOP + (cur_vy - (int)writer_scroll_row);
+
+        if (writer_text[i] == '\n') {
+            cur_vx = 0;
+            cur_vy++;
+        } else {
+            if (screen_y >= WRITER_VIEW_TOP && screen_y <= WRITER_VIEW_BOTTOM) {
+                ((volatile unsigned short*)0xB8000)[screen_y * VGA_WIDTH + cur_vx] =
+                    ((unsigned short)color << 8) | (unsigned char)writer_text[i];
+            }
+            cur_vx++;
+            if (cur_vx >= VGA_WIDTH) {
+                cur_vx = 0;
+                cur_vy++;
+            }
+        }
     }
 
     // 3. Підвал (basement): soon will be a notification board
@@ -137,9 +169,17 @@ static void writer_render(const char* filename) {
     }
 
     // 4. Позиція курсора (cursor position)
-    cursor_x = cur_x;
-    cursor_y = cur_y;
+    cursor_x = cursor_v_x;
+    cursor_y = WRITER_VIEW_TOP + (cursor_v_y - (int)writer_scroll_row);
     update_cursor();
+}
+
+static void writer_scroll(void) {
+    if (writer_cursor == writer_length) {
+        for (unsigned int i = 1; i < writer_length; i++) {
+            ((volatile unsigned short*)0xB8000)[i] = ((volatile unsigned short*)0xB8000)[i-1];
+        }
+    }
 }
 
 static void writer_insert(char c) {
@@ -173,6 +213,7 @@ void writer_open(const char* filename) {
 
     writer_length = 0;
     writer_cursor = 0;
+    writer_scroll_row = 0;
 
     status_msg = "";
 

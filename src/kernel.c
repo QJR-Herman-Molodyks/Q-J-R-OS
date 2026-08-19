@@ -34,7 +34,7 @@ int shift_pressed = 0;
 
 // os info
 static char name[] = "Q-J-R OS";
-static char version[] = "2.0.1";
+static char version[] = "2.0.2";
 
 // architecture
 int max_32bit = 2147483647;
