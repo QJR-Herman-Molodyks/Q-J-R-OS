@@ -57,7 +57,7 @@
 **Graphics**       : VGA Text Mode 80x25   
 
 **ATA Support**    : FAT16 ATA Chain Support   
-**SATA Support**   : No (temporary)
+**SATA Support**   : No (temporary)   
 **Filesystem**     : FAT16   
 
 **Floopy**         : No   
