@@ -6,7 +6,7 @@
 
 2. Writer
     2.1. Add scrolling feature [+]
-    2.2. Add posibility to TAB
+    2.2. Add posibility to TAB [+]
     2.3. Add stylization
     2.4. Add auto-saving
     2.5. Arrows -> change cursor position

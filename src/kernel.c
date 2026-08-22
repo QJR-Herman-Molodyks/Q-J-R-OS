@@ -18,6 +18,10 @@ extern void ata_delete(char* filename);
 
 extern void ata_stat(char* filename);
 
+extern void mkdir(char* path);
+extern void chdir(char* path);
+extern void pwd(void);
+
 // Writer
 extern void writer_open(const char* filename);
 
@@ -34,7 +38,7 @@ int shift_pressed = 0;
 
 // os info
 static char name[] = "Q-J-R OS";
-static char version[] = "2.0.2";
+static char version[] = "2.0.3";
 
 // architecture
 int max_32bit = 2147483647;
@@ -403,6 +407,9 @@ static void execute_command(void)
         print("  del    - delete file\n");
         print("  stat   - show file information\n");
         print("\n");
+        print("  mkdir  - create a directory\n");
+        print("  cd     - change a directory\n");
+        print("  pwd    - print working directory path\n");
     } else if (strcmp(input, "exit") == 0) {
         print("System halted.");
         update_cursor();
@@ -472,6 +479,22 @@ static void execute_command(void)
         if (arg != 0) {
             ata_stat(arg);
         }
+    } else if (startswith(input, "mkdir") == 1) {
+        char* arg = get_arg(input);
+
+        if (arg != 0) {
+            mkdir(arg);
+        }
+	} else if (startswith(input, "cd") == 1) {
+       char* arg = get_arg(input);
+       if (arg != 0 && arg[0] != '\0') {
+          chdir(arg);
+       } else {
+          print("Usage: cd <dirname>\n");
+       }
+    } else if (strcmp(input, "pwd") == 0) {
+        pwd();
+
     } else if (strcmp(input, "echo") == 0) {
         print("echo: Use echo <text> to print anything to the screen!\n");
     } else {

@@ -12,6 +12,8 @@
 
 #define KEY_ESC 27
 #define KEY_F1  0x3B
+// #define KEY_F2  0x3D
+#define KEY_TAB  0x09
 
 /*
  * Беремо напряму рідні функції та змінні з kernel.c
@@ -59,6 +61,9 @@ static unsigned char writer_get_key(void) {
 
         if (scancode == 0x01) return KEY_ESC;
         if (scancode == 0x3B) return KEY_F1;
+        if (scancode == 0x09) return KEY_TAB;
+
+        // if (scancode == 0x36) return KEY_F2;
 
         if (scancode < 60) {
             char c = shift ? keyboard_map_upper[scancode] : keyboard_map[scancode];
@@ -94,7 +99,7 @@ static void writer_render(const char* filename) {
     // 1. Заголовок (Header)
     cursor_x = 0;
     cursor_y = 0;
-    print("| [Q-J-R Writer v2.0.1] | ");
+    print("| [Q-J-R Writer v2.0.2] | ");
     print(filename);
     print(" | [ESC] Exit  [F1] Save\n");
 
@@ -222,7 +227,7 @@ void writer_open(const char* filename) {
     while (1) {
         unsigned char key = writer_get_key();
 
-        if (key == KEY_ESC) break;
+        if (key == KEY_ESC) break; // escaping
         if (key == KEY_F1) {
             if (fat16_write_buffer(filename, writer_text, writer_length)) {
                 status_msg = "SAVED SUCCESSFULLY!";
@@ -232,6 +237,7 @@ void writer_open(const char* filename) {
             writer_render(filename);
             continue;
         } // saving, connecting to FAT16
+        if (key == KEY_TAB) {for (unsigned int tb = 0; tb < 4; tb++) {writer_insert(' ');}} // TABULATION
 
         if (key == '\b') {
             writer_backspace();

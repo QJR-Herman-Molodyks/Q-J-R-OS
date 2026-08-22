@@ -15,7 +15,7 @@ start:
 
     ; Завантажуємо kernel починаючи з сектора 2
     mov ah, 0x02
-    mov al, 40              ; 40 секторів
+    mov al, 48              ; 48 секторів
     mov ch, 0
     mov cl, 2
     mov dh, 0

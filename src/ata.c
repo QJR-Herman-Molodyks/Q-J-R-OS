@@ -65,6 +65,10 @@ extern char* cut_text(const char* text, int index_start, int index_end);
 extern int get_first_space_index(const char* text);
 extern char* get_arg(const char* text);
 
+// 0 = Root directory, >= 2 = Cluster of current directory
+static unsigned short current_dir_cluster = 0;
+static char current_path[128] = "/";
+
 // ATA INB
 static unsigned char ata_inb(unsigned short port)
 {
@@ -445,6 +449,7 @@ static unsigned short fat16_allocate_cluster_chain(
     return first_cluster;
 }
 
+// crete root entry
 
 static int fat16_create_root_entry(
     const char* filename,
@@ -617,6 +622,261 @@ static int fat16_validate_bpb(const unsigned char* buffer) {
     return 1;
 }
 
+// create_root_directory_entry
+
+static int fat16_create_root_dir_entry(
+    const char* dirname,
+    unsigned short cluster
+)
+{
+    unsigned char buffer[512];
+
+    unsigned int root_dir_start =
+        fat16.reserved_sectors +
+        ((unsigned int)fat16.fat_count * fat16.sectors_per_fat);
+
+    unsigned int root_dir_sectors =
+        ((unsigned int)fat16.root_entries * 32 +
+         fat16.bytes_per_sector - 1) /
+        fat16.bytes_per_sector;
+
+    char name[8];
+    char ext[3];
+
+    for (int i = 0; i < 8; i++)
+        name[i] = ' ';
+
+    for (int i = 0; i < 3; i++)
+        ext[i] = ' ';
+
+    int i = 0;
+
+    // Папки зазвичай не мають розширень (беруться перші до 8 символів)
+    while (dirname[i] != '\0' && dirname[i] != '.' && i < 8) {
+        char c = dirname[i];
+        if (c >= 'a' && c <= 'z')
+            c -= 'a' - 'A';
+        name[i] = c;
+        i++;
+    }
+
+    for (unsigned int sector = 0; sector < root_dir_sectors; sector++) {
+        if (!ata_read_sector(ATA_DRIVE_SLAVE, root_dir_start + sector, buffer)) {
+            print("FAT16: Directory read error\n");
+            return 0;
+        }
+
+        for (unsigned int offset = 0; offset < fat16.bytes_per_sector; offset += 32) {
+            unsigned char* entry = &buffer[offset];
+
+            if (entry[0] != 0x00 && entry[0] != 0xE5)
+                continue;
+
+            for (int k = 0; k < 8; k++)
+                entry[k] = name[k];
+
+            for (int k = 0; k < 3; k++)
+                entry[8 + k] = ext[k];
+
+            // 0x10 = Атрибут директорії (Directory Attribute)
+            entry[11] = 0x10;
+
+            for (int k = 12; k < 26; k++)
+                entry[k] = 0;
+
+            entry[26] = cluster & 0xFF;
+            entry[27] = (cluster >> 8) & 0xFF;
+
+            // Розмір директорії в FAT16 завжди 0
+            entry[28] = 0;
+            entry[29] = 0;
+            entry[30] = 0;
+            entry[31] = 0;
+
+            if (!ata_write_sector(ATA_DRIVE_SLAVE, root_dir_start + sector, buffer)) {
+                print("FAT16: Directory write error\n");
+                return 0;
+            }
+
+            return 1;
+        }
+    }
+
+    print("FAT16: Root directory is full\n");
+    return 0;
+}
+
+static int fat16_add_entry_to_current_dir(
+    const char* filename,
+    unsigned short cluster,
+    unsigned int file_size,
+    unsigned char attr
+)
+{
+    unsigned char buffer[512];
+    char name[8];
+    char ext[3];
+
+    for (int i = 0; i < 8; i++) name[i] = ' ';
+    for (int i = 0; i < 3; i++) ext[i] = ' ';
+
+    int i = 0;
+    int j = 0;
+
+    while (filename[i] != '\0' && filename[i] != '.' && i < 8) {
+        char c = filename[i];
+        if (c >= 'a' && c <= 'z') c -= 'a' - 'A';
+        name[i] = c;
+        i++;
+    }
+
+    if (filename[i] == '.') {
+        i++;
+        while (filename[i] != '\0' && j < 3) {
+            char c = filename[i];
+            if (c >= 'a' && c <= 'z') c -= 'a' - 'A';
+            ext[j++] = c;
+            i++;
+        }
+    }
+
+    // 1. Якщо ми в Root Directory (current_dir_cluster == 0)
+    if (current_dir_cluster == 0) {
+        unsigned int root_dir_start =
+            fat16.reserved_sectors +
+            ((unsigned int)fat16.fat_count * fat16.sectors_per_fat);
+
+        unsigned int root_dir_sectors =
+            ((unsigned int)fat16.root_entries * 32 +
+             fat16.bytes_per_sector - 1) /
+            fat16.bytes_per_sector;
+
+        for (unsigned int sector = 0; sector < root_dir_sectors; sector++) {
+            if (!ata_read_sector(ATA_DRIVE_SLAVE, root_dir_start + sector, buffer)) {
+                print("FAT16: Directory read error\n");
+                return 0;
+            }
+
+            for (unsigned int offset = 0; offset < fat16.bytes_per_sector; offset += 32) {
+                unsigned char* entry = &buffer[offset];
+
+                if (entry[0] != 0x00 && entry[0] != 0xE5)
+                    continue;
+
+                for (int k = 0; k < 8; k++) entry[k] = name[k];
+                for (int k = 0; k < 3; k++) entry[8 + k] = ext[k];
+
+                entry[11] = attr;
+
+                for (int k = 12; k < 26; k++) entry[k] = 0;
+
+                entry[26] = cluster & 0xFF;
+                entry[27] = (cluster >> 8) & 0xFF;
+
+                entry[28] = file_size & 0xFF;
+                entry[29] = (file_size >> 8) & 0xFF;
+                entry[30] = (file_size >> 16) & 0xFF;
+                entry[31] = (file_size >> 24) & 0xFF;
+
+                if (!ata_write_sector(ATA_DRIVE_SLAVE, root_dir_start + sector, buffer)) {
+                    print("FAT16: Directory write error\n");
+                    return 0;
+                }
+                return 1;
+            }
+        }
+        print("FAT16: Root directory full\n");
+        return 0;
+    }
+
+    // 2. Якщо ми в Subdirectory (current_dir_cluster >= 2)
+    unsigned int data_start =
+        fat16.reserved_sectors +
+        ((unsigned int)fat16.fat_count * fat16.sectors_per_fat) +
+        (((unsigned int)fat16.root_entries * 32 +
+          fat16.bytes_per_sector - 1) /
+         fat16.bytes_per_sector);
+
+    unsigned short curr = current_dir_cluster;
+    unsigned short last_cluster = curr;
+
+    while (curr >= 2 && curr < 0xFFF8) {
+        last_cluster = curr;
+        unsigned int cluster_sector =
+            data_start + ((unsigned int)(curr - 2) * fat16.sectors_per_cluster);
+
+        for (unsigned int s = 0; s < fat16.sectors_per_cluster; s++) {
+            if (!ata_read_sector(ATA_DRIVE_SLAVE, cluster_sector + s, buffer)) {
+                return 0;
+            }
+
+            for (unsigned int offset = 0; offset < fat16.bytes_per_sector; offset += 32) {
+                unsigned char* entry = &buffer[offset];
+
+                if (entry[0] != 0x00 && entry[0] != 0xE5)
+                    continue;
+
+                for (int k = 0; k < 8; k++) entry[k] = name[k];
+                for (int k = 0; k < 3; k++) entry[8 + k] = ext[k];
+
+                entry[11] = attr;
+
+                for (int k = 12; k < 26; k++) entry[k] = 0;
+
+                entry[26] = cluster & 0xFF;
+                entry[27] = (cluster >> 8) & 0xFF;
+
+                entry[28] = file_size & 0xFF;
+                entry[29] = (file_size >> 8) & 0xFF;
+                entry[30] = (file_size >> 16) & 0xFF;
+                entry[31] = (file_size >> 24) & 0xFF;
+
+                if (!ata_write_sector(ATA_DRIVE_SLAVE, cluster_sector + s, buffer)) {
+                    return 0;
+                }
+                return 1;
+            }
+        }
+        curr = fat16_get_next_cluster(curr);
+    }
+
+    // Якщо вільних слотів не вистачило — виділяємо новий кластер для піддиректорії
+    unsigned short new_dir_cluster = fat16_allocate_cluster_chain(1);
+    if (new_dir_cluster == 0) {
+        print("FAT16: Subdirectory full, allocation failed\n");
+        return 0;
+    }
+
+    if (!fat16_set_cluster(last_cluster, new_dir_cluster)) {
+        return 0;
+    }
+
+    // Зануляємо новий кластер
+    unsigned int new_sector =
+        data_start + ((unsigned int)(new_dir_cluster - 2) * fat16.sectors_per_cluster);
+
+    for (int k = 0; k < 512; k++) buffer[k] = 0;
+
+    // Перший запис — наш новий файл/папка
+    for (int k = 0; k < 8; k++) buffer[k] = name[k];
+    for (int k = 0; k < 3; k++) buffer[8 + k] = ext[k];
+    buffer[11] = attr;
+    buffer[26] = cluster & 0xFF;
+    buffer[27] = (cluster >> 8) & 0xFF;
+    buffer[28] = file_size & 0xFF;
+    buffer[29] = (file_size >> 8) & 0xFF;
+    buffer[30] = (file_size >> 16) & 0xFF;
+    buffer[31] = (file_size >> 24) & 0xFF;
+
+    ata_write_sector(ATA_DRIVE_SLAVE, new_sector, buffer);
+
+    for (int k = 0; k < 512; k++) buffer[k] = 0;
+    for (unsigned int s = 1; s < fat16.sectors_per_cluster; s++) {
+        ata_write_sector(ATA_DRIVE_SLAVE, new_sector + s, buffer);
+    }
+
+    return 1;
+}
 
 
 // command: ata
@@ -692,85 +952,185 @@ void init_ata(void) {
 }
 
 // command: ls
-void ata_ls(void) { // maybe path in args, don't know
-    // print current directory / path files list
+
+void ata_ls(void) {
     if (fat16.bytes_per_sector == 0) {
         print("FAT16: Not mounted\n");
         return;
     }
 
-    unsigned int root_dir_start =
-        fat16.reserved_sectors +
-        ((unsigned int)fat16.fat_count * fat16.sectors_per_fat);
-
-    unsigned int root_dir_sectors =
-        ((unsigned int)fat16.root_entries * 32 +
-         fat16.bytes_per_sector - 1) /
-        fat16.bytes_per_sector;
-
     unsigned char buffer[512];
-
     print("Files:\n");
 
-    for (unsigned int sector = 0;
-         sector < root_dir_sectors;
-         sector++) {
+    // 1. Якщо ми в Root
+    if (current_dir_cluster == 0) {
+        unsigned int root_dir_start =
+            fat16.reserved_sectors + ((unsigned int)fat16.fat_count * fat16.sectors_per_fat);
+        unsigned int root_dir_sectors =
+            ((unsigned int)fat16.root_entries * 32 + fat16.bytes_per_sector - 1) / fat16.bytes_per_sector;
 
-        if (!ata_read_sector(
-                ATA_DRIVE_SLAVE,
-                root_dir_start + sector,
-                buffer)) {
-
-            print("FAT16: Directory read error\n");
-            return;
-        }
-
-        for (unsigned int offset = 0;
-             offset < fat16.bytes_per_sector;
-             offset += 32) {
-
-            unsigned char* entry = &buffer[offset];
-
-            // End of directory
-            if (entry[0] == 0x00)
+        for (unsigned int sector = 0; sector < root_dir_sectors; sector++) {
+            if (!ata_read_sector(ATA_DRIVE_SLAVE, root_dir_start + sector, buffer)) {
+                print("FAT16: Directory read error\n");
                 return;
-
-            // Deleted entry
-            if (entry[0] == 0xE5)
-                continue;
-
-            // Long File Name entry
-            if (entry[11] == 0x0F)
-                continue;
-
-            // Volume label
-            if (entry[11] & 0x08)
-                continue;
-
-            // Filename: 8 characters
-            for (int i = 0; i < 8; i++) {
-                if (entry[i] == ' ')
-                    break;
-
-                put_char(entry[i]);
             }
 
-            // Extension
-            if (entry[8] != ' ') {
-                put_char('.');
+            for (unsigned int offset = 0; offset < fat16.bytes_per_sector; offset += 32) {
+                unsigned char* entry = &buffer[offset];
+                if (entry[0] == 0x00) return;
+                if (entry[0] == 0xE5 || entry[11] == 0x0F || (entry[11] & 0x08)) continue;
 
-                for (int i = 8; i < 11; i++) {
-                    if (entry[i] == ' ')
-                        break;
+                if (entry[11] & 0x10) print("[DIR]  ");
+                else                  print("[FILE] ");
 
+                for (int i = 0; i < 8; i++) {
+                    if (entry[i] == ' ') break;
                     put_char(entry[i]);
                 }
+                if (entry[8] != ' ') {
+                    put_char('.');
+                    for (int i = 8; i < 11; i++) {
+                        if (entry[i] == ' ') break;
+                        put_char(entry[i]);
+                    }
+                }
+                print("\n");
             }
+        }
+    }
+    // 2. Якщо ми в підпапці
+    else {
+        unsigned int data_start =
+            fat16.reserved_sectors +
+            ((unsigned int)fat16.fat_count * fat16.sectors_per_fat) +
+            (((unsigned int)fat16.root_entries * 32 + fat16.bytes_per_sector - 1) / fat16.bytes_per_sector);
 
-            print("\n");
-             }
-         }
+        unsigned short cluster = current_dir_cluster;
+
+        while (cluster >= 2 && cluster < 0xFFF8) {
+            unsigned int cluster_sector =
+                data_start + ((unsigned int)(cluster - 2) * fat16.sectors_per_cluster);
+
+            for (unsigned int s = 0; s < fat16.sectors_per_cluster; s++) {
+                if (!ata_read_sector(ATA_DRIVE_SLAVE, cluster_sector + s, buffer)) {
+                    print("FAT16: Directory read error\n");
+                    return;
+                }
+
+                for (unsigned int offset = 0; offset < fat16.bytes_per_sector; offset += 32) {
+                    unsigned char* entry = &buffer[offset];
+                    if (entry[0] == 0x00) return;
+                    if (entry[0] == 0xE5 || entry[11] == 0x0F) continue;
+
+                    if (entry[11] & 0x10) print("[DIR]  ");
+                    else                  print("[FILE] ");
+
+                    for (int i = 0; i < 8; i++) {
+                        if (entry[i] == ' ') break;
+                        put_char(entry[i]);
+                    }
+                    if (entry[8] != ' ') {
+                        put_char('.');
+                        for (int i = 8; i < 11; i++) {
+                            if (entry[i] == ' ') break;
+                            put_char(entry[i]);
+                        }
+                    }
+                    print("\n");
+                }
+            }
+            cluster = fat16_get_next_cluster(cluster);
+        }
+    }
 }
+
+//void ata_ls(void) { // maybe path in args, don't know
+//    // print current directory / path files list
+//    if (fat16.bytes_per_sector == 0) {
+//        print("FAT16: Not mounted\n");
+//        return;
+//    }
+
+//    unsigned int root_dir_start =
+//        fat16.reserved_sectors +
+//        ((unsigned int)fat16.fat_count * fat16.sectors_per_fat);
+
+//    unsigned int root_dir_sectors =
+//        ((unsigned int)fat16.root_entries * 32 +
+//         fat16.bytes_per_sector - 1) /
+//        fat16.bytes_per_sector;
+
+//    unsigned char buffer[512];
+
+//    print("Files:\n");
+
+//    for (unsigned int sector = 0;
+//         sector < root_dir_sectors;
+//         sector++) {
+
+//        if (!ata_read_sector(
+//                ATA_DRIVE_SLAVE,
+//                root_dir_start + sector,
+//                buffer)) {
+
+//            print("FAT16: Directory read error\n");
+//            return;
+//        }
+
+//        for (unsigned int offset = 0;
+//             offset < fat16.bytes_per_sector;
+//             offset += 32) {
+
+//            unsigned char* entry = &buffer[offset];
+
+            // End of directory
+//            if (entry[0] == 0x00)
+//                return;
+
+            // Deleted entry
+//            if (entry[0] == 0xE5)
+//                continue;
+
+            // Long File Name entry
+//            if (entry[11] == 0x0F)
+//                continue;
+
+            // Volume label
+//            if (entry[11] & 0x08)
+//                continue;
+
+            // If it's a directory
+
+//            if (entry[11] & 0x10) {
+//                print("[DIR]  ");
+//            } else {
+//                print("[FILE] ");
+//            }
+
+            // Filename: 8 characters
+//            for (int i = 0; i < 8; i++) {
+//                if (entry[i] == ' ')
+//                    break;
+
+//                put_char(entry[i]);
+//            }
+
+            // Extension
+//            if (entry[8] != ' ') {
+//                put_char('.');
+
+//                for (int i = 8; i < 11; i++) {
+//                    if (entry[i] == ' ')
+//                        break;
+
+//                    put_char(entry[i]);
+//                }
+//            }
+//
+//            print("\n");
+//             }
+//         }
+//}
 
 // ATA: read <filename>
 
@@ -1442,7 +1802,7 @@ int fat16_write_buffer(const char* filename, const char* buffer, unsigned int te
         return 0;
     }
 
-    // If file or already exists -> delete old version and save new (NEED TO CHANGE)
+    // If file or already exists -> delete old version and save new!
     ata_delete((char*)filename);
 
     unsigned int cluster_size = (unsigned int)fat16.bytes_per_sector * fat16.sectors_per_cluster;
@@ -1495,3 +1855,251 @@ int fat16_write_buffer(const char* filename, const char* buffer, unsigned int te
 
     return 1; // Saved successfully
 }
+
+// ATA: mkdir <dirname>
+void mkdir(char* path) {
+    if (fat16.bytes_per_sector == 0) {
+        print("FAT16: Not mounted\n");
+        return;
+    }
+
+    if (path == 0 || path[0] == '\0') {
+        print("Usage: mkdir <dirname>\n");
+        return;
+    }
+
+    print("FAT16: Allocating directory cluster...\n");
+
+    // 1. Selecting first cluster for the content of new directory
+    unsigned short cluster = fat16_allocate_cluster_chain(1);
+    if (cluster == 0) {
+        print("FAT16: Failed to allocate cluster for directory\n");
+        return;
+    }
+
+    // 2. Counting a starting data sector for selected cluster
+    unsigned int data_start =
+        fat16.reserved_sectors +
+        ((unsigned int)fat16.fat_count * fat16.sectors_per_fat) +
+        (((unsigned int)fat16.root_entries * 32 +
+          fat16.bytes_per_sector - 1) /
+         fat16.bytes_per_sector);
+
+    unsigned int dir_sector =
+        data_start +
+        ((unsigned int)(cluster - 2) * fat16.sectors_per_cluster);
+
+    // 3. Forming a starting sector with "." & ".."
+    unsigned char block[512];
+    for (int i = 0; i < 512; i++) {
+        block[i] = 0;
+    }
+
+    // Запис "." (поточна директорія) -> зміщення 0
+    block[0] = '.';
+    for (int i = 1; i < 11; i++) block[i] = ' ';
+    block[11] = 0x10; // Directory
+    block[26] = cluster & 0xFF;
+    block[27] = (cluster >> 8) & 0xFF;
+
+    // Запис ".." (батьківська директорія: 0x0000 для Root) -> зміщення 32 (0x20)
+    block[32] = '.';
+    block[33] = '.';
+    for (int i = 2; i < 11; i++) block[32 + i] = ' ';
+    block[32 + 11] = 0x10; // Directory
+    block[32 + 26] = 0; // Кластер 0 означає Root Directory
+    block[32 + 27] = 0;
+
+    // Записуємо перший сектор нової папки
+    if (!ata_write_sector(ATA_DRIVE_SLAVE, dir_sector, block)) {
+        print("FAT16: Failed to initialize directory block\n");
+        return;
+    }
+
+    // Якщо в кластері більше одного сектора, зануляємо решту
+    unsigned char zero_block[512];
+    for (int i = 0; i < 512; i++) zero_block[i] = 0;
+    for (unsigned int s = 1; s < fat16.sectors_per_cluster; s++) {
+        ata_write_sector(ATA_DRIVE_SLAVE, dir_sector + s, zero_block);
+    }
+
+    // 4. Створюємо запис нової папки в кореневому каталозі
+    if (!fat16_create_root_dir_entry(path, cluster)) {
+        print("FAT16: Failed to create root entry for directory\n");
+        return;
+    }
+
+    print("Directory created: ");
+    print(path);
+    print("\n");
+}
+
+// ATA: pwd
+void pwd(void) {
+    if (fat16.bytes_per_sector == 0) {
+        print("FAT16: Not mounted\n");
+        return;
+    }
+    print(current_path);
+    print("\n");
+}
+
+// ATA: cd <dirname>
+void chdir(char* path) {
+    // if directory exists ->
+    // -> change path
+
+    // else (directory doesn't exist) ->
+    // print("ERROR: No such file or directory -> ");
+    // print(path);
+    // print("\n");
+
+    if (fat16.bytes_per_sector == 0) {
+        print("FAT16: Not mounted\n");
+        return;
+    }
+
+    if (path == 0 || path[0] == '\0') {
+        print("Usage: cd <dirname>\n");
+        return;
+    }
+
+    // 1. Перехід у корінь: cd / або cd <backslash>
+    if (strcmp(path, "/") == 0 || strcmp(path, "\\") == 0) {
+        current_dir_cluster = 0;
+        current_path[0] = '/';
+        current_path[1] = '\0';
+        return;
+    }
+
+    // Підготовка імені для порівняння у форматі 8.3
+    char name[8];
+    char ext[3];
+    for (int i = 0; i < 8; i++) name[i] = ' ';
+    for (int i = 0; i < 3; i++) ext[i] = ' ';
+
+    int i = 0;
+    while (path[i] != '\0' && path[i] != '.' && i < 8) {
+        char c = path[i];
+        if (c >= 'a' && c <= 'z') c -= 'a' - 'A';
+        name[i] = c;
+        i++;
+    }
+
+    // Обробка "." та ".."
+    if (strcmp(path, ".") == 0) {
+        name[0] = '.';
+    } else if (strcmp(path, "..") == 0) {
+        name[0] = '.';
+        name[1] = '.';
+    }
+
+    unsigned char buffer[512];
+    unsigned short target_cluster = 0xFFFF;
+    int is_dir = 0;
+
+    // 2. Якщо ми в Root Directory (current_dir_cluster == 0)
+    if (current_dir_cluster == 0) {
+        unsigned int root_dir_start =
+            fat16.reserved_sectors + ((unsigned int)fat16.fat_count * fat16.sectors_per_fat);
+        unsigned int root_dir_sectors =
+            ((unsigned int)fat16.root_entries * 32 + fat16.bytes_per_sector - 1) / fat16.bytes_per_sector;
+
+        for (unsigned int sector = 0; sector < root_dir_sectors; sector++) {
+            if (!ata_read_sector(ATA_DRIVE_SLAVE, root_dir_start + sector, buffer)) return;
+
+            for (unsigned int offset = 0; offset < fat16.bytes_per_sector; offset += 32) {
+                unsigned char* entry = &buffer[offset];
+                if (entry[0] == 0x00) break;
+                if (entry[0] == 0xE5 || entry[11] == 0x0F || (entry[11] & 0x08)) continue;
+
+                int match = 1;
+                for (int k = 0; k < 8; k++) {
+                    if (entry[k] != (unsigned char)name[k]) { match = 0; break; }
+                }
+
+                if (match && (entry[11] & 0x10)) { // Перевірка чи це папка
+                    target_cluster = entry[26] | ((unsigned short)entry[27] << 8);
+                    is_dir = 1;
+                    break;
+                }
+            }
+            if (is_dir) break;
+        }
+    }
+    // 3. Якщо ми вже всередині підпапки (current_dir_cluster >= 2)
+    else {
+        unsigned int data_start =
+            fat16.reserved_sectors +
+            ((unsigned int)fat16.fat_count * fat16.sectors_per_fat) +
+            (((unsigned int)fat16.root_entries * 32 + fat16.bytes_per_sector - 1) / fat16.bytes_per_sector);
+
+        unsigned short cluster = current_dir_cluster;
+
+        while (cluster >= 2 && cluster < 0xFFF8) {
+            unsigned int cluster_sector =
+                data_start + ((unsigned int)(cluster - 2) * fat16.sectors_per_cluster);
+
+            for (unsigned int s = 0; s < fat16.sectors_per_cluster; s++) {
+                if (!ata_read_sector(ATA_DRIVE_SLAVE, cluster_sector + s, buffer)) return;
+
+                for (unsigned int offset = 0; offset < fat16.bytes_per_sector; offset += 32) {
+                    unsigned char* entry = &buffer[offset];
+                    if (entry[0] == 0x00) break;
+                    if (entry[0] == 0xE5 || entry[11] == 0x0F) continue;
+
+                    int match = 1;
+                    for (int k = 0; k < 8; k++) {
+                        if (entry[k] != (unsigned char)name[k]) { match = 0; break; }
+                    }
+
+                    if (match && (entry[11] & 0x10)) {
+                        target_cluster = entry[26] | ((unsigned short)entry[27] << 8);
+                        is_dir = 1;
+                        break;
+                    }
+                }
+                if (is_dir) break;
+            }
+            if (is_dir) break;
+            cluster = fat16_get_next_cluster(cluster);
+        }
+    }
+
+    // 4. Результат пошуку
+    if (!is_dir || target_cluster == 0xFFFF) {
+        print("cd: No such directory: ");
+        print(path);
+        print("\n");
+        return;
+    }
+
+    current_dir_cluster = target_cluster;
+
+    // Оновлюємо відображення шляху (current_path)
+    if (strcmp(path, "..") == 0) {
+        if (current_dir_cluster == 0) {
+            current_path[0] = '/';
+            current_path[1] = '\0';
+        } else {
+            // Відкатуємо шлях до попереднього скісного
+            int len_p = 0;
+            while (current_path[len_p]) len_p++;
+            while (len_p > 1 && current_path[len_p - 1] != '/') {
+                len_p--;
+            }
+            if (len_p > 1) len_p--; // прибираємо зайвий скісний
+            current_path[len_p] = '\0';
+        }
+    } else if (strcmp(path, ".") != 0) {
+        int len_p = 0;
+        while (current_path[len_p]) len_p++;
+        if (len_p > 1) current_path[len_p++] = '/';
+        int k = 0;
+        while (path[k]) {
+            current_path[len_p++] = path[k++];
+        }
+        current_path[len_p] = '\0';
+    }
+}
+
