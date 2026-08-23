@@ -29,11 +29,20 @@
 #### ATA
 
 9. Initialize ATA - ata
+
+##### ATA: Work with Files
+
 10. List of files in a current directory - ls
 11. Read file - read
 12. Write file - write
 13. Delete file - del
 14. File statistics - stat
+
+##### ATA: Work with directories
+
+15. Make directory - mkdir
+16. Print Working Directory Path - pwd
+17. Change the directory - cd
 
 ### Compilation
 
