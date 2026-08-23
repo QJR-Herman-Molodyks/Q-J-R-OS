@@ -1146,6 +1146,7 @@ void ata_read(char* filename)
         return;
     }
 
+
     unsigned int root_dir_start =
         fat16.reserved_sectors +
         ((unsigned int)fat16.fat_count *
@@ -1201,79 +1202,101 @@ void ata_read(char* filename)
     }
 
     /*
-     * Search root directory.
+     * Search directory.
      */
 
-    for (unsigned int sector = 0;
-         sector < root_dir_sectors;
-         sector++) {
+    if (current_dir_cluster == 0) {
+        unsigned int root_dir_start =
+            fat16.reserved_sectors +
+            ((unsigned int)fat16.fat_count * fat16.sectors_per_fat);
 
-        if (!ata_read_sector(
-                ATA_DRIVE_SLAVE,
-                root_dir_start + sector,
-                buffer)) {
+        unsigned int root_dir_sectors =
+            ((unsigned int)fat16.root_entries * 32 +
+             fat16.bytes_per_sector - 1) /
+            fat16.bytes_per_sector;
 
-            print("FAT16: Directory read error\n");
-            return;
-        }
+        for (unsigned int sector = 0; sector < root_dir_sectors; sector++) {
+            if (!ata_read_sector(ATA_DRIVE_SLAVE, root_dir_start + sector, buffer)) {
+                print("FAT16: Directory read error\n");
+                return;
+            }
 
-        for (unsigned int offset = 0;
-             offset < fat16.bytes_per_sector;
-             offset += 32) {
+            for (unsigned int offset = 0; offset < fat16.bytes_per_sector; offset += 32) {
+                unsigned char* entry = &buffer[offset];
+                if (entry[0] == 0x00) break;
+                if (entry[0] == 0xE5 || entry[11] == 0x0F || (entry[11] & 0x08)) continue;
 
-            unsigned char* entry = &buffer[offset];
-
-            if (entry[0] == 0x00)
-                break;
-
-            if (entry[0] == 0xE5)
-                continue;
-
-            if (entry[11] == 0x0F)
-                continue;
-
-            if (entry[11] & 0x08)
-                continue;
-
-            int match = 1;
-
-            for (int k = 0; k < 8; k++) {
-                if (entry[k] != (unsigned char)name[k]) {
-                    match = 0;
+                int match = 1;
+                for (int k = 0; k < 8; k++) {
+                    if (entry[k] != (unsigned char)name[k]) { match = 0; break; }
+                }
+                if (match) {
+                    for (int k = 0; k < 3; k++) {
+                        if (entry[8 + k] != (unsigned char)ext[k]) { match = 0; break; }
+                    }
+                }
+                if (match) {
+                    file_cluster = entry[26] | ((unsigned short)entry[27] << 8);
+                    file_size = entry[28] |
+                                ((unsigned int)entry[29] << 8) |
+                                ((unsigned int)entry[30] << 16) |
+                                ((unsigned int)entry[31] << 24);
                     break;
                 }
             }
+            if (file_cluster != 0) break;
+        }
+    } else {
+        // Пошук у підпапці
+        unsigned int data_start =
+            fat16.reserved_sectors +
+            ((unsigned int)fat16.fat_count * fat16.sectors_per_fat) +
+            (((unsigned int)fat16.root_entries * 32 +
+              fat16.bytes_per_sector - 1) /
+             fat16.bytes_per_sector);
 
-            if (match) {
-                for (int k = 0; k < 3; k++) {
-                    if (entry[8 + k] !=
-                        (unsigned char)ext[k]) {
+        unsigned short c_curr = current_dir_cluster;
+        while (c_curr >= 2 && c_curr < 0xFFF8) {
+            unsigned int cluster_sec =
+                data_start + ((unsigned int)(c_curr - 2) * fat16.sectors_per_cluster);
 
-                        match = 0;
+            for (unsigned int s = 0; s < fat16.sectors_per_cluster; s++) {
+                if (!ata_read_sector(ATA_DRIVE_SLAVE, cluster_sec + s, buffer)) {
+                    print("FAT16: Directory read error\n");
+                    return;
+                }
+
+                for (unsigned int off = 0; off < fat16.bytes_per_sector; off += 32) {
+                    unsigned char* entry = &buffer[off];
+                    if (entry[0] == 0x00) break;
+                    if (entry[0] == 0xE5 || entry[11] == 0x0F) continue;
+
+                    int match = 1;
+                    for (int k = 0; k < 8; k++) {
+                        if (entry[k] != (unsigned char)name[k]) { match = 0; break; }
+                    }
+                    if (match) {
+                        for (int k = 0; k < 3; k++) {
+                            if (entry[8 + k] != (unsigned char)ext[k]) { match = 0; break; }
+                        }
+                    }
+                    if (match) {
+                        file_cluster = entry[26] | ((unsigned short)entry[27] << 8);
+                        file_size = entry[28] |
+                                    ((unsigned int)entry[29] << 8) |
+                                    ((unsigned int)entry[30] << 16) |
+                                    ((unsigned int)entry[31] << 24);
                         break;
                     }
                 }
+                if (file_cluster != 0) break;
             }
-
-            if (!match)
-                continue;
-
-            file_cluster =
-                entry[26] |
-                ((unsigned short)entry[27] << 8);
-
-            file_size =
-                entry[28] |
-                ((unsigned int)entry[29] << 8) |
-                ((unsigned int)entry[30] << 16) |
-                ((unsigned int)entry[31] << 24);
-
-            break;
+            if (file_cluster != 0) break;
+            c_curr = fat16_get_next_cluster(c_curr);
         }
-
-        if (file_cluster != 0)
-            break;
     }
+
+    // File found: next steps
 
     if (file_cluster == 0) {
         print("FAT16: File not found\n");
@@ -1375,18 +1398,7 @@ void ata_stat(char* filename)
         return;
     }
 
-    unsigned int root_dir_start =
-        fat16.reserved_sectors +
-        ((unsigned int)fat16.fat_count *
-         fat16.sectors_per_fat);
-
-    unsigned int root_dir_sectors =
-        ((unsigned int)fat16.root_entries * 32 +
-         fat16.bytes_per_sector - 1) /
-        fat16.bytes_per_sector;
-
     unsigned char buffer[512];
-
     unsigned short file_cluster = 0;
     unsigned int file_size = 0;
 
@@ -1405,103 +1417,142 @@ void ata_stat(char* filename)
     while (filename[i] != '\0' &&
            filename[i] != '.' &&
            i < 8) {
-
         char c = filename[i];
-
         if (c >= 'a' && c <= 'z')
             c -= 'a' - 'A';
-
         name[i] = c;
         i++;
     }
 
     if (filename[i] == '.') {
         i++;
-
         while (filename[i] != '\0' && j < 3) {
             char c = filename[i];
-
             if (c >= 'a' && c <= 'z')
                 c -= 'a' - 'A';
-
             ext[j++] = c;
             i++;
         }
     }
 
     /*
-     * Search root directory.
+     * Search directory.
      */
+    if (current_dir_cluster == 0) { // Root directory
+        unsigned int root_dir_start =
+            fat16.reserved_sectors +
+            ((unsigned int)fat16.fat_count * fat16.sectors_per_fat);
 
-    for (unsigned int sector = 0;
-         sector < root_dir_sectors;
-         sector++) {
+        unsigned int root_dir_sectors =
+            ((unsigned int)fat16.root_entries * 32 +
+             fat16.bytes_per_sector - 1) /
+            fat16.bytes_per_sector;
 
-        if (!ata_read_sector(
-                ATA_DRIVE_SLAVE,
-                root_dir_start + sector,
-                buffer)) {
-
-            print("FAT16: Directory read error\n");
-            return;
-        }
-
-        for (unsigned int offset = 0;
-             offset < fat16.bytes_per_sector;
-             offset += 32) {
-
-            unsigned char* entry = &buffer[offset];
-
-            if (entry[0] == 0x00)
-                break;
-
-            if (entry[0] == 0xE5)
-                continue;
-
-            if (entry[11] == 0x0F)
-                continue;
-
-            if (entry[11] & 0x08)
-                continue;
-
-            int match = 1;
-
-            for (int k = 0; k < 8; k++) {
-                if (entry[k] != (unsigned char)name[k]) {
-                    match = 0;
-                    break;
-                }
+        for (unsigned int sector = 0; sector < root_dir_sectors; sector++) {
+            if (!ata_read_sector(ATA_DRIVE_SLAVE, root_dir_start + sector, buffer)) {
+                print("FAT16: Directory read error\n");
+                return;
             }
 
-            if (match) {
-                for (int k = 0; k < 3; k++) {
-                    if (entry[8 + k] !=
-                        (unsigned char)ext[k]) {
+            for (unsigned int offset = 0; offset < fat16.bytes_per_sector; offset += 32) {
+                unsigned char* entry = &buffer[offset];
 
+                if (entry[0] == 0x00)
+                    break;
+                if (entry[0] == 0xE5 || entry[11] == 0x0F || (entry[11] & 0x08))
+                    continue;
+
+                int match = 1;
+                for (int k = 0; k < 8; k++) {
+                    if (entry[k] != (unsigned char)name[k]) {
                         match = 0;
                         break;
                     }
                 }
+
+                if (match) {
+                    for (int k = 0; k < 3; k++) {
+                        if (entry[8 + k] != (unsigned char)ext[k]) {
+                            match = 0;
+                            break;
+                        }
+                    }
+                }
+
+                if (match) {
+                    file_cluster = entry[26] | ((unsigned short)entry[27] << 8);
+                    file_size = entry[28] |
+                                ((unsigned int)entry[29] << 8) |
+                                ((unsigned int)entry[30] << 16) |
+                                ((unsigned int)entry[31] << 24);
+                    break;
+                }
             }
-
-            if (!match)
-                continue;
-
-            file_cluster =
-                entry[26] |
-                ((unsigned short)entry[27] << 8);
-
-            file_size =
-                entry[28] |
-                ((unsigned int)entry[29] << 8) |
-                ((unsigned int)entry[30] << 16) |
-                ((unsigned int)entry[31] << 24);
-
-            break;
+            if (file_cluster != 0)
+                break;
         }
+    } else { // Subdirectory
+        unsigned int data_start =
+            fat16.reserved_sectors +
+            ((unsigned int)fat16.fat_count * fat16.sectors_per_fat) +
+            (((unsigned int)fat16.root_entries * 32 +
+              fat16.bytes_per_sector - 1) /
+             fat16.bytes_per_sector);
 
-        if (file_cluster != 0)
-            break;
+        unsigned short c_curr = current_dir_cluster;
+
+        while (c_curr >= 2 && c_curr < 0xFFF8) {
+            unsigned int cluster_sec =
+                data_start + ((unsigned int)(c_curr - 2) * fat16.sectors_per_cluster);
+
+            for (unsigned int s = 0; s < fat16.sectors_per_cluster; s++) {
+                if (!ata_read_sector(ATA_DRIVE_SLAVE, cluster_sec + s, buffer)) {
+                    print("FAT16: Directory read error\n");
+                    return;
+                }
+
+                for (unsigned int off = 0; off < fat16.bytes_per_sector; off += 32) {
+                    unsigned char* entry = &buffer[off];
+
+                    if (entry[0] == 0x00)
+                        break;
+                    if (entry[0] == 0xE5 || entry[11] == 0x0F)
+                        continue;
+
+                    int match = 1;
+                    for (int k = 0; k < 8; k++) {
+                        if (entry[k] != (unsigned char)name[k]) {
+                            match = 0;
+                            break;
+                        }
+                    }
+
+                    if (match) {
+                        for (int k = 0; k < 3; k++) {
+                            if (entry[8 + k] != (unsigned char)ext[k]) {
+                                match = 0;
+                                break;
+                            }
+                        }
+                    }
+
+                    if (match) {
+                        file_cluster = entry[26] | ((unsigned short)entry[27] << 8);
+                        file_size = entry[28] |
+                                    ((unsigned int)entry[29] << 8) |
+                                    ((unsigned int)entry[30] << 16) |
+                                    ((unsigned int)entry[31] << 24);
+                        break;
+                    }
+                }
+                if (file_cluster != 0)
+                    break;
+            }
+            if (file_cluster != 0)
+                break;
+
+            c_curr = fat16_get_next_cluster(c_curr);
+        }
     }
 
     if (file_cluster == 0) {
@@ -1512,17 +1563,12 @@ void ata_stat(char* filename)
     /*
      * Count clusters.
      */
-
     unsigned int cluster_count = 0;
     unsigned short current_cluster = file_cluster;
 
-    while (current_cluster >= 2 &&
-           current_cluster < 0xFFF8) {
-
+    while (current_cluster >= 2 && current_cluster < 0xFFF8) {
         cluster_count++;
-
-        unsigned short next_cluster =
-            fat16_get_next_cluster(current_cluster);
+        unsigned short next_cluster = fat16_get_next_cluster(current_cluster);
 
         if (next_cluster == 0) {
             print("FAT16: Invalid cluster chain\n");
@@ -1537,7 +1583,6 @@ void ata_stat(char* filename)
     print("\n");
 
     print("Size: ");
-
     char size_buffer[12];
     unsigned int value = file_size;
     int position = 0;
@@ -1549,24 +1594,18 @@ void ata_stat(char* filename)
         int reverse_position = 0;
 
         while (value > 0) {
-            reverse[reverse_position++] =
-                '0' + (value % 10);
-
+            reverse[reverse_position++] = '0' + (value % 10);
             value /= 10;
         }
 
         while (reverse_position > 0)
-            size_buffer[position++] =
-                reverse[--reverse_position];
+            size_buffer[position++] = reverse[--reverse_position];
     }
-
     size_buffer[position] = '\0';
-
     print(size_buffer);
     print(" bytes\n");
 
     print("First cluster: ");
-
     value = file_cluster;
     position = 0;
 
@@ -1577,24 +1616,18 @@ void ata_stat(char* filename)
         int reverse_position = 0;
 
         while (value > 0) {
-            reverse[reverse_position++] =
-                '0' + (value % 10);
-
+            reverse[reverse_position++] = '0' + (value % 10);
             value /= 10;
         }
 
         while (reverse_position > 0)
-            size_buffer[position++] =
-                reverse[--reverse_position];
+            size_buffer[position++] = reverse[--reverse_position];
     }
-
     size_buffer[position] = '\0';
-
     print(size_buffer);
     print("\n");
 
     print("Clusters: ");
-
     value = cluster_count;
     position = 0;
 
@@ -1605,19 +1638,14 @@ void ata_stat(char* filename)
         int reverse_position = 0;
 
         while (value > 0) {
-            reverse[reverse_position++] =
-                '0' + (value % 10);
-
+            reverse[reverse_position++] = '0' + (value % 10);
             value /= 10;
         }
 
         while (reverse_position > 0)
-            size_buffer[position++] =
-                reverse[--reverse_position];
+            size_buffer[position++] = reverse[--reverse_position];
     }
-
     size_buffer[position] = '\0';
-
     print(size_buffer);
     print("\n");
 }
@@ -1635,156 +1663,155 @@ void ata_delete(char* filename)
         return;
     }
 
-    unsigned int root_dir_start =
-        fat16.reserved_sectors +
-        ((unsigned int)fat16.fat_count * fat16.sectors_per_fat);
-
-    unsigned int root_dir_sectors =
-        ((unsigned int)fat16.root_entries * 32 +
-         fat16.bytes_per_sector - 1) /
-        fat16.bytes_per_sector;
-
-    unsigned char buffer[512];
-
     char name[8];
     char ext[3];
-
-    for (int i = 0; i < 8; i++)
-        name[i] = ' ';
-
-    for (int i = 0; i < 3; i++)
-        ext[i] = ' ';
+    for (int i = 0; i < 8; i++) name[i] = ' ';
+    for (int i = 0; i < 3; i++) ext[i] = ' ';
 
     int i = 0;
     int j = 0;
-
-    while (filename[i] != '\0' &&
-           filename[i] != '.' &&
-           i < 8) {
-
+    while (filename[i] != '\0' && filename[i] != '.' && i < 8) {
         char c = filename[i];
-
-        if (c >= 'a' && c <= 'z')
-            c -= 'a' - 'A';
-
+        if (c >= 'a' && c <= 'z') c -= 'a' - 'A';
         name[i] = c;
         i++;
     }
 
     if (filename[i] == '.') {
         i++;
-
         while (filename[i] != '\0' && j < 3) {
             char c = filename[i];
-
-            if (c >= 'a' && c <= 'z')
-                c -= 'a' - 'A';
-
+            if (c >= 'a' && c <= 'z') c -= 'a' - 'A';
             ext[j++] = c;
             i++;
         }
     }
 
-    for (unsigned int sector = 0;
-         sector < root_dir_sectors;
-         sector++) {
+    unsigned char buffer[512];
+    unsigned int match_sector = 0;
+    unsigned int match_offset = 0;
+    unsigned short cluster = 0;
+    int found = 0;
 
-        if (!ata_read_sector(
-                ATA_DRIVE_SLAVE,
-                root_dir_start + sector,
-                buffer)) {
+    // 1. Пошук запису файлу
+    if (current_dir_cluster == 0) {
+        unsigned int root_dir_start =
+            fat16.reserved_sectors +
+            ((unsigned int)fat16.fat_count * fat16.sectors_per_fat);
 
-            print("FAT16: Directory read error\n");
-            return;
-        }
+        unsigned int root_dir_sectors =
+            ((unsigned int)fat16.root_entries * 32 +
+             fat16.bytes_per_sector - 1) /
+            fat16.bytes_per_sector;
 
-        for (unsigned int offset = 0;
-             offset < fat16.bytes_per_sector;
-             offset += 32) {
-
-            unsigned char* entry = &buffer[offset];
-
-            if (entry[0] == 0x00)
+        for (unsigned int sector = 0; sector < root_dir_sectors; sector++) {
+            if (!ata_read_sector(ATA_DRIVE_SLAVE, root_dir_start + sector, buffer)) {
+                print("FAT16: Directory read error\n");
                 return;
+            }
 
-            if (entry[0] == 0xE5)
-                continue;
+            for (unsigned int offset = 0; offset < fat16.bytes_per_sector; offset += 32) {
+                unsigned char* entry = &buffer[offset];
+                if (entry[0] == 0x00) break;
+                if (entry[0] == 0xE5 || entry[11] == 0x0F || (entry[11] & 0x08)) continue;
 
-            if (entry[11] == 0x0F)
-                continue;
-
-            if (entry[11] & 0x08)
-                continue;
-
-            int match = 1;
-
-            for (int k = 0; k < 8; k++) {
-                if (entry[k] != (unsigned char)name[k]) {
-                    match = 0;
+                int match = 1;
+                for (int k = 0; k < 8; k++) {
+                    if (entry[k] != (unsigned char)name[k]) { match = 0; break; }
+                }
+                if (match) {
+                    for (int k = 0; k < 3; k++) {
+                        if (entry[8 + k] != (unsigned char)ext[k]) { match = 0; break; }
+                    }
+                }
+                if (match) {
+                    cluster = entry[26] | ((unsigned short)entry[27] << 8);
+                    match_sector = root_dir_start + sector;
+                    match_offset = offset;
+                    found = 1;
                     break;
                 }
             }
+            if (found) break;
+        }
+    } else {
+        // Пошук у підпапці
+        unsigned int data_start =
+            fat16.reserved_sectors +
+            ((unsigned int)fat16.fat_count * fat16.sectors_per_fat) +
+            (((unsigned int)fat16.root_entries * 32 +
+              fat16.bytes_per_sector - 1) /
+             fat16.bytes_per_sector);
 
-            if (match) {
-                for (int k = 0; k < 3; k++) {
-                    if (entry[8 + k] !=
-                        (unsigned char)ext[k]) {
+        unsigned short c_curr = current_dir_cluster;
+        while (c_curr >= 2 && c_curr < 0xFFF8) {
+            unsigned int cluster_sec =
+                data_start + ((unsigned int)(c_curr - 2) * fat16.sectors_per_cluster);
 
-                        match = 0;
+            for (unsigned int s = 0; s < fat16.sectors_per_cluster; s++) {
+                if (!ata_read_sector(ATA_DRIVE_SLAVE, cluster_sec + s, buffer)) return;
+
+                for (unsigned int off = 0; off < fat16.bytes_per_sector; off += 32) {
+                    unsigned char* entry = &buffer[off];
+                    if (entry[0] == 0x00) break;
+                    if (entry[0] == 0xE5 || entry[11] == 0x0F) continue;
+
+                    int match = 1;
+                    for (int k = 0; k < 8; k++) {
+                        if (entry[k] != (unsigned char)name[k]) { match = 0; break; }
+                    }
+                    if (match) {
+                        for (int k = 0; k < 3; k++) {
+                            if (entry[8 + k] != (unsigned char)ext[k]) { match = 0; break; }
+                        }
+                    }
+                    if (match) {
+                        cluster = entry[26] | ((unsigned short)entry[27] << 8);
+                        match_sector = cluster_sec + s;
+                        match_offset = off;
+                        found = 1;
                         break;
                     }
                 }
+                if (found) break;
             }
-
-            if (!match)
-                continue;
-
-            unsigned short cluster =
-                entry[26] |
-                ((unsigned short)entry[27] << 8);
-
-            print("FAT16: File found\n");
-
-            if (cluster >= 2) {
-                unsigned short current_cluster = cluster;
-
-                while (current_cluster >= 2 &&
-                       current_cluster < 0xFFF8) {
-
-                    unsigned short next_cluster =
-                        fat16_get_next_cluster(current_cluster);
-
-                    if (!fat16_set_cluster(
-                            current_cluster,
-                            FAT16_CLUSTER_FREE)) {
-
-                        print("FAT16: Failed to free cluster\n");
-                        return;
-                    }
-
-                    current_cluster = next_cluster;
-                }
-
-                print("FAT16: Cluster chain freed\n");
-            }
-
-            entry[0] = 0xE5;
-
-            if (!ata_write_sector(
-                    ATA_DRIVE_SLAVE,
-                    root_dir_start + sector,
-                    buffer)) {
-
-                print("FAT16: Directory write error\n");
-                return;
-            }
-
-            print("FAT16: File deleted\n");
-            return;
+            if (found) break;
+            c_curr = fat16_get_next_cluster(c_curr);
         }
     }
 
-    print("FAT16: File not found\n");
+    if (!found) {
+        print("FAT16: File not found\n");
+        return;
+    }
+
+    print("FAT16: File found\n");
+
+    // 2. Звільняємо ланцюжок кластерів
+    if (cluster >= 2) {
+        unsigned short current_cluster = cluster;
+        while (current_cluster >= 2 && current_cluster < 0xFFF8) {
+            unsigned short next_cluster = fat16_get_next_cluster(current_cluster);
+            if (!fat16_set_cluster(current_cluster, FAT16_CLUSTER_FREE)) {
+                print("FAT16: Failed to free cluster\n");
+                return;
+            }
+            current_cluster = next_cluster;
+        }
+        print("FAT16: Cluster chain freed\n");
+    }
+
+    // 3. Позначаємо запис як видалений (0xE5)
+    if (!ata_read_sector(ATA_DRIVE_SLAVE, match_sector, buffer)) {
+        return;
+    }
+    buffer[match_offset] = 0xE5;
+    if (!ata_write_sector(ATA_DRIVE_SLAVE, match_sector, buffer)) {
+        print("FAT16: Directory write error\n");
+        return;
+    }
+
+    print("FAT16: File deleted\n");
 }
 
 
@@ -1794,15 +1821,9 @@ void ata_delete(char* filename)
  * ========================================================================= */
 int fat16_write_buffer(const char* filename, const char* buffer, unsigned int text_length)
 {
-    if (fat16.bytes_per_sector == 0) {
-        return 0; // not mounted
-    }
+    if (fat16.bytes_per_sector == 0) return 0;
+    if (!filename || filename[0] == '\0') return 0;
 
-    if (!filename || filename[0] == '\0') {
-        return 0;
-    }
-
-    // If file or already exists -> delete old version and save new!
     ata_delete((char*)filename);
 
     unsigned int cluster_size = (unsigned int)fat16.bytes_per_sector * fat16.sectors_per_cluster;
@@ -1810,9 +1831,7 @@ int fat16_write_buffer(const char* filename, const char* buffer, unsigned int te
     if (cluster_count == 0) cluster_count = 1;
 
     unsigned short cluster = fat16_allocate_cluster_chain(cluster_count);
-    if (cluster == 0) {
-        return 0;
-    }
+    if (cluster == 0) return 0;
 
     unsigned int data_start =
         fat16.reserved_sectors +
@@ -1849,11 +1868,12 @@ int fat16_write_buffer(const char* filename, const char* buffer, unsigned int te
         if (current_cluster == 0) return 0;
     }
 
-    if (!fat16_create_root_entry(filename, cluster, text_length)) {
+    // Зберігаємо файл (атрибут 0x20 - ATTR_ARCHIVE) у поточній папці
+    if (!fat16_add_entry_to_current_dir(filename, cluster, text_length, 0x20)) {
         return 0;
     }
 
-    return 1; // Saved successfully
+    return 1;
 }
 
 // ATA: mkdir <dirname>
@@ -1870,14 +1890,12 @@ void mkdir(char* path) {
 
     print("FAT16: Allocating directory cluster...\n");
 
-    // 1. Selecting first cluster for the content of new directory
     unsigned short cluster = fat16_allocate_cluster_chain(1);
     if (cluster == 0) {
-        print("FAT16: Failed to allocate cluster for directory\n");
+        print("FAT16: Failed to allocate cluster\n");
         return;
     }
 
-    // 2. Counting a starting data sector for selected cluster
     unsigned int data_start =
         fat16.reserved_sectors +
         ((unsigned int)fat16.fat_count * fat16.sectors_per_fat) +
@@ -1889,43 +1907,38 @@ void mkdir(char* path) {
         data_start +
         ((unsigned int)(cluster - 2) * fat16.sectors_per_cluster);
 
-    // 3. Forming a starting sector with "." & ".."
     unsigned char block[512];
-    for (int i = 0; i < 512; i++) {
-        block[i] = 0;
-    }
+    for (int i = 0; i < 512; i++) block[i] = 0;
 
-    // Запис "." (поточна директорія) -> зміщення 0
+    // 1. Запис "." (вказує на себе)
     block[0] = '.';
     for (int i = 1; i < 11; i++) block[i] = ' ';
-    block[11] = 0x10; // Directory
+    block[11] = 0x10;
     block[26] = cluster & 0xFF;
     block[27] = (cluster >> 8) & 0xFF;
 
-    // Запис ".." (батьківська директорія: 0x0000 для Root) -> зміщення 32 (0x20)
+    // 2. Запис ".." (вказує на current_dir_cluster)
     block[32] = '.';
     block[33] = '.';
     for (int i = 2; i < 11; i++) block[32 + i] = ' ';
-    block[32 + 11] = 0x10; // Directory
-    block[32 + 26] = 0; // Кластер 0 означає Root Directory
-    block[32 + 27] = 0;
+    block[32 + 11] = 0x10;
+    block[32 + 26] = current_dir_cluster & 0xFF;
+    block[32 + 27] = (current_dir_cluster >> 8) & 0xFF;
 
-    // Записуємо перший сектор нової папки
     if (!ata_write_sector(ATA_DRIVE_SLAVE, dir_sector, block)) {
-        print("FAT16: Failed to initialize directory block\n");
+        print("FAT16: Failed to write dir block\n");
         return;
     }
 
-    // Якщо в кластері більше одного сектора, зануляємо решту
     unsigned char zero_block[512];
     for (int i = 0; i < 512; i++) zero_block[i] = 0;
     for (unsigned int s = 1; s < fat16.sectors_per_cluster; s++) {
         ata_write_sector(ATA_DRIVE_SLAVE, dir_sector + s, zero_block);
     }
 
-    // 4. Створюємо запис нової папки в кореневому каталозі
-    if (!fat16_create_root_dir_entry(path, cluster)) {
-        print("FAT16: Failed to create root entry for directory\n");
+    // 3. Додаємо запис у поточну директорію з атрибутом 0x10 (DIR)
+    if (!fat16_add_entry_to_current_dir(path, cluster, 0, 0x10)) {
+        print("FAT16: Failed to create entry\n");
         return;
     }
 
@@ -2102,4 +2115,3 @@ void chdir(char* path) {
         current_path[len_p] = '\0';
     }
 }
-

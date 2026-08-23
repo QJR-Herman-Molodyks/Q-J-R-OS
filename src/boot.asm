@@ -14,14 +14,20 @@ start:
     mov [boot_drive], dl
 
     ; Завантажуємо kernel починаючи з сектора 2
-    mov ah, 0x02
-    mov al, 48              ; 48 секторів
-    mov ch, 0
-    mov cl, 2
-    mov dh, 0
-    mov dl, [boot_drive]
+    ; mov ah, 0x02
+    ; mov al, 54              ; 54 сектори
+    ; mov ch, 0
+    ; mov cl, 2
+    ; mov dh, 0
+    ; mov dl, [boot_drive]
 
-    mov bx, 0x1000          ; ES:BX = 0000:1000
+    ; mov bx, 0x1000          ; ES:BX = 0000:1000
+    ; int 0x13
+
+    ; Завантажуємо 127 секторів ядра (до кінця файлу os.img розміром 64KB)
+    mov ah, 0x42
+    mov dl, [boot_drive]
+    mov si, dap
     int 0x13
 
     jc disk_error
@@ -52,10 +58,6 @@ disk_error:
     mov ah, 0x0E
     int 0x10
     jmp .print
-
-error_msg db "Disk error!", 0
-
-boot_drive db 0
 
 
 ; =========================
@@ -110,8 +112,20 @@ protected_mode:
 
     mov esp, 0x90000
 
-    ; kernel_entry буде завантажений за 0x1000
-    jmp 0x1000
+    ; kernel_entry буде завантажений за 0x10000
+    jmp 0x10000
+
+error_msg db "Disk error!", 0
+boot_drive db 0
+
+align 4
+dap:
+    db 0x10      ; Розмір структури DAP (16 байт)
+    db 0         ; Завжди нуль
+    dw 127       ; Кількість секторів для читання (64 КБ - 1 сектор bootloader)
+    dw 0x0000    ; Offset: 0
+    dw 0x1000    ; Segment: 0x1000 (0x1000:0x0000 = фізична адреса 0x10000)
+    dq 1         ; Початковий LBA (сектор 2 на диску має індекс 1)
 
 
 times 510 - ($ - $$) db 0

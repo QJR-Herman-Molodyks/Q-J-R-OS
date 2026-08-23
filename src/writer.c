@@ -13,7 +13,7 @@
 #define KEY_ESC 27
 #define KEY_F1  0x3B
 // #define KEY_F2  0x3D
-#define KEY_TAB  0x09
+#define KEY_TAB 0x0F
 
 /*
  * Беремо напряму рідні функції та змінні з kernel.c
@@ -61,7 +61,7 @@ static unsigned char writer_get_key(void) {
 
         if (scancode == 0x01) return KEY_ESC;
         if (scancode == 0x3B) return KEY_F1;
-        if (scancode == 0x09) return KEY_TAB;
+        if (scancode == KEY_TAB) return '\t';
 
         // if (scancode == 0x36) return KEY_F2;
 
@@ -237,7 +237,7 @@ void writer_open(const char* filename) {
             writer_render(filename);
             continue;
         } // saving, connecting to FAT16
-        if (key == KEY_TAB) {for (unsigned int tb = 0; tb < 4; tb++) {writer_insert(' ');}} // TABULATION
+        // if (key == KEY_TAB) { writer_insert('\t'); } // TABULATION
 
         if (key == '\b') {
             writer_backspace();
@@ -245,6 +245,8 @@ void writer_open(const char* filename) {
             writer_insert('\n');
         } else if (key >= 32 && key <= 126) {
             writer_insert((char)key);
+        } else if (key == '\t') {
+          for (unsigned int tb = 0; tb < 4; tb++) { writer_insert(' '); }
         }
 
         writer_render(filename);
