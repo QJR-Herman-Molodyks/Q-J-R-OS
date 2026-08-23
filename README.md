@@ -9,9 +9,10 @@
 4. kernel.c
 5. kernel_entry.asm
 6. writer.c   
+7. idt.c    
 
-7. linker.ld
-8. Makefile
+8. linker.ld
+9. Makefile
 
 ### Features:
 
