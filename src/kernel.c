@@ -22,6 +22,12 @@ extern void mkdir(char* path);
 extern void chdir(char* path);
 extern void pwd(void);
 
+// IDT
+
+extern void init_idt(void);
+extern int keyboard_has_char(void);
+extern unsigned char keyboard_pop_scancode(void);
+
 // Writer
 extern void writer_open(const char* filename);
 
@@ -38,7 +44,7 @@ int shift_pressed = 0;
 
 // os info
 static char name[] = "Q-J-R OS";
-static char version[] = "2.1";
+static char version[] = "3.0";
 
 // architecture
 int max_32bit = 2147483647;
@@ -360,25 +366,29 @@ char* get_arg(const char* text) {
     return cut_text(text, space + 1, len(text) - 1);
 }
 
-unsigned char keyboard_read(void) {
-    unsigned char status;
-
-    do {
-        __asm__ volatile (
-            "inb $0x64, %0"
-            : "=a"(status)
-        );
-    } while (!(status & 1));
-
-    unsigned char scancode;
-
-    __asm__ volatile (
-        "inb $0x60, %0"
-        : "=a"(scancode)
-    );
-
-    return scancode;
+static unsigned char keyboard_read(void) {
+    return keyboard_pop_scancode();
 }
+
+//unsigned char keyboard_read(void) {
+//    unsigned char status;
+
+//    do {
+//        __asm__ volatile (
+//            "inb $0x64, %0"
+//            : "=a"(status)
+//        );
+//    } while (!(status & 1));
+
+//    unsigned char scancode;
+
+//    __asm__ volatile (
+//        "inb $0x60, %0"
+//        : "=a"(scancode)
+//    );
+//
+//    return scancode;
+//}
 
 // command execution
 static void execute_command(void)
@@ -642,8 +652,16 @@ void kernel_main(void)
     clear_screen();
 
     print("Q-J-R OS\n");
-    print("Protected Mode kernel\n");
-    print("----------------------\n\n");
+    print("Protected Mode kernel (IDT + IRQ enabled)\n");
+    print("-----------------------------------------\n\n");
+
+	// 1. Load Interruption Table
+	init_idt();
+
+	// 2. Enabling Hardware Interruption of CPU (Set Interrupt Flag)
+	__asm__ __volatile__("sti");
+
+	// 3. Load Mini-Conhost
 
     print("Q-J-R OS> ");
     update_cursor();

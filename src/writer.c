@@ -1,5 +1,5 @@
 /*
- * Q-J-R OS Writer v2.0 (Simple Edition)
+ * Q-J-R OS Writer v2.0 (No Flicker & Sync with IRQ1)
  */
 
 #define VGA_WIDTH  80
@@ -12,11 +12,10 @@
 
 #define KEY_ESC 27
 #define KEY_F1  0x3B
-// #define KEY_F2  0x3D
 #define KEY_TAB 0x0F
 
 /*
- * Беремо напряму рідні функції та змінні з kernel.c
+ * Беремо напряму рідні функції та змінні з kernel.c / idt.c
  */
 extern volatile unsigned short* VGA_MEMORY;
 extern int cursor_x;
@@ -30,30 +29,21 @@ extern void update_cursor(void);
 extern void print(const char* str);
 extern void put_char(char c);
 
+// Читання через чергу IRQ1 з idt.c
+extern unsigned char keyboard_pop_scancode(void);
+
 /*
  * ATA functions
  */
-
 int fat16_write_buffer(const char* filename, const char* buffer, unsigned int text_length);
 
 /*
- * Внутрішнє читання клавіші (використовує рідні змінні ядра)
+ * Читання клавіші через системний IDT буфер
  */
-static unsigned char keyboard_read_raw(void) {
-    unsigned char status;
-    do {
-        __asm__ volatile ("inb $0x64, %0" : "=a"(status));
-    } while (!(status & 1));
-
-    unsigned char scancode;
-    __asm__ volatile ("inb $0x60, %0" : "=a"(scancode));
-    return scancode;
-}
-
 static unsigned char writer_get_key(void) {
     static int shift = 0;
     while (1) {
-        unsigned char scancode = keyboard_read_raw();
+        unsigned char scancode = keyboard_pop_scancode();
 
         if (scancode == 0x2A || scancode == 0x36) { shift = 1; continue; }
         if (scancode == 0xAA || scancode == 0xB6) { shift = 0; continue; }
@@ -62,8 +52,6 @@ static unsigned char writer_get_key(void) {
         if (scancode == 0x01) return KEY_ESC;
         if (scancode == 0x3B) return KEY_F1;
         if (scancode == KEY_TAB) return '\t';
-
-        // if (scancode == 0x36) return KEY_F2;
 
         if (scancode < 60) {
             char c = shift ? keyboard_map_upper[scancode] : keyboard_map[scancode];
@@ -81,7 +69,6 @@ static unsigned int writer_cursor = 0;
 static unsigned int writer_scroll_row = 0;
 static char* status_msg = "";
 
-
 static void print_number(unsigned int val) {
     if (val == 0) { put_char('0'); return; }
     char buf[10];
@@ -94,16 +81,22 @@ static void print_number(unsigned int val) {
 }
 
 static void writer_render(const char* filename) {
-    clear_screen();
+    // 1. Очищення всього екрана синім кольором (0x1F)
+    for (int y = 0; y < VGA_HEIGHT; y++) {
+        for (int x = 0; x < VGA_WIDTH; x++) {
+            ((volatile unsigned short*)0xB8000)[y * VGA_WIDTH + x] =
+                ((unsigned short)color << 8) | ' ';
+        }
+    }
 
-    // 1. Заголовок (Header)
+    // 2. Малюємо Заголовок (Рядок 0)
     cursor_x = 0;
     cursor_y = 0;
     print("| [Q-J-R Writer v2.0.2] | ");
     print(filename);
-    print(" | [ESC] Exit  [F1] Save\n");
+    print(" | [ESC] Exit  [F1] Save");
 
-    // 2. Текст (Text)
+    // 3. Розрахунок віртуальних координат курсора
     int cursor_v_x = 0;
     int cursor_v_y = 0;
     int cur_vx = 0;
@@ -132,7 +125,7 @@ static void writer_render(const char* filename) {
         cursor_v_y = cur_vy;
     }
 
-    // start scrolling process
+    // 4. Автоскрол
     if (cursor_v_y < (int)writer_scroll_row) {
         writer_scroll_row = cursor_v_y;
     }
@@ -140,7 +133,7 @@ static void writer_render(const char* filename) {
         writer_scroll_row = cursor_v_y - WRITER_VIEW_HEIGHT + 1;
     }
 
-    // drawing text after scrolling
+    // 5. Малювання тексту
     cur_vx = 0;
     cur_vy = 0;
 
@@ -163,7 +156,7 @@ static void writer_render(const char* filename) {
         }
     }
 
-    // 3. Підвал (basement): soon will be a notification board
+    // 6. Малюємо Підвал (Рядок 24)
     cursor_x = 0;
     cursor_y = VGA_HEIGHT - 1;
     print(" Chars: ");
@@ -173,18 +166,10 @@ static void writer_render(const char* filename) {
         print(status_msg);
     }
 
-    // 4. Позиція курсора (cursor position)
+    // 7. Ставимо апаратний курсор на місце
     cursor_x = cursor_v_x;
     cursor_y = WRITER_VIEW_TOP + (cursor_v_y - (int)writer_scroll_row);
     update_cursor();
-}
-
-static void writer_scroll(void) {
-    if (writer_cursor == writer_length) {
-        for (unsigned int i = 1; i < writer_length; i++) {
-            ((volatile unsigned short*)0xB8000)[i] = ((volatile unsigned short*)0xB8000)[i-1];
-        }
-    }
 }
 
 static void writer_insert(char c) {
@@ -209,7 +194,6 @@ static void writer_backspace(void) {
     status_msg = "";
 }
 
-
 void writer_open(const char* filename) {
     if (!filename || filename[0] == '\0') {
         print("Usage: write <filename>\n");
@@ -222,6 +206,7 @@ void writer_open(const char* filename) {
 
     status_msg = "";
 
+    clear_screen(); // Очищуємо екран лише один раз при вході в редактор
     writer_render(filename);
 
     while (1) {
@@ -236,17 +221,16 @@ void writer_open(const char* filename) {
             }
             writer_render(filename);
             continue;
-        } // saving, connecting to FAT16
-        // if (key == KEY_TAB) { writer_insert('\t'); } // TABULATION
+        }
 
         if (key == '\b') {
             writer_backspace();
         } else if (key == '\n') {
             writer_insert('\n');
+        } else if (key == '\t') {
+            for (unsigned int tb = 0; tb < 4; tb++) { writer_insert(' '); }
         } else if (key >= 32 && key <= 126) {
             writer_insert((char)key);
-        } else if (key == '\t') {
-          for (unsigned int tb = 0; tb < 4; tb++) { writer_insert(' '); }
         }
 
         writer_render(filename);

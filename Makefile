@@ -55,6 +55,20 @@ build:
 		-c src/writer.c \
 		-o build/writer.o
 
+	i686-elf-gcc \
+		   -m32 \
+		   -mgeneral-regs-only \
+		   -ffreestanding \
+		   -fno-pie \
+		   -fno-stack-protector \
+		   -fno-builtin \
+		   -nostdlib \
+		   -nodefaultlibs \
+		   -Wall \
+		   -Wextra \
+		   -c src/idt.c \
+		   -o build/idt.o
+
 	nasm -f elf32 src/kernel_entry.asm \
 		-o build/kernel_entry.o
 
@@ -66,7 +80,8 @@ build:
 		build/kernel.o \
 		build/calculator.o \
 		build/ata.o \
-		build/writer.o
+		build/writer.o \
+		build/idt.o
 
 	i686-elf-objcopy \
 		-O binary \
@@ -87,7 +102,8 @@ diagnose:
 run:
 	qemu-system-i386 \
         -drive format=raw,file=build/os.img \
-        -drive format=raw,file=dsk/fat16.img
+        -drive format=raw,file=dsk/fat16.img \
+		-boot c
 
 run_nod:
 	qemu-system-i386 -drive format=raw,file=build/os.img

@@ -1,4 +1,4 @@
-# Official Open-Source Q-J-R OS v2.0.2
+# Official Open-Source Q-J-R OS v3.0
 ## GNU Public License v3.0 (GPL-3.0)!
 
 ### Source Files:   
