@@ -1,4 +1,4 @@
-# Official Open-Source Q-J-R OS v3.0
+# Official Open-Source Q-J-R OS v3.1
 ## GNU Public License v3.0 (GPL-3.0)!
 
 ### Source Files:   
@@ -79,7 +79,7 @@
 **Floopy**         : No   
 
 **OS**             : Q-J-R OS   
-**Version**        : 2.0.2   
+**Version**        : 3.1   
 **Kernel**         : Q-J-R OS Kernel v2.0.2    
 **Kernel Type**    : Monolithic Kernel (Not fully)    
 **Release Date**   : 2026-08-19     
