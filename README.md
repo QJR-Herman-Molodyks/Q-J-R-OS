@@ -10,9 +10,11 @@
 5. kernel_entry.asm
 6. writer.c   
 7. idt.c    
+8. memory.c
+9. writer.c
 
-8. linker.ld
-9. Makefile
+10. linker.ld
+11. Makefile
 
 ### Features:
 
@@ -44,6 +46,10 @@
 15. Make directory - mkdir
 16. Print Working Directory Path - pwd
 17. Change the directory - cd
+
+#### Hardware
+
+18. See RAM information - ram
 
 ### Compilation
 
