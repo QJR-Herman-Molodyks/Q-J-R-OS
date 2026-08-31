@@ -4,9 +4,13 @@
 #define VGA_HEIGHT 25
 #define INPUT_SIZE 64
 
+#include "include/io.h"
+
 // calculator
 extern void calculator(void);
 extern void calc(char* expression);
+
+extern void print_int(int n);
 
 // ATA
 extern void init_ata(void);
@@ -31,6 +35,13 @@ extern unsigned char keyboard_pop_scancode(void);
 // Writer
 extern void writer_open(const char* filename);
 
+// Memory Management
+extern unsigned int detect_memory_mb(void);
+extern void pmm_init(unsigned int total_ram_mb);
+extern void kmalloc_init(void);
+extern void* kmalloc(unsigned int size);
+extern void kfree(void* ptr);
+
 // config and DB vars
 char input[INPUT_SIZE];
 static char cut_text_buffer[INPUT_SIZE];
@@ -44,7 +55,7 @@ int shift_pressed = 0;
 
 // os info
 static char name[] = "Q-J-R OS";
-static char version[] = "3.0";
+static char version[] = "3.1";
 
 // architecture
 int max_32bit = 2147483647;
@@ -248,6 +259,22 @@ void reboot(void)
     }
 }
 
+// VGA Draw Rect
+
+void vga_fill_rect(int start_x, int start_y, int end_x, int end_y, int width, int height, char c, unsigned char color_attr) {
+    unsigned short entry = ((unsigned short)color_attr << 8) | (unsigned char)c;
+
+    // for (int y = start_y; y < start_y + height; y++) {
+    //    for (int x = start_x; x < start_x + width; x++) {
+	for (int y = start_y; y < start_y + end_y; y++) {
+		for (int x = start_x; x < start_x + end_x; x++) {
+            if (x >= 0 && x < VGA_WIDTH && y >= 0 && y < VGA_HEIGHT) {
+                VGA_MEMORY[y * VGA_WIDTH + x] = entry;
+            }
+        }
+    }
+}
+
 // time
 unsigned char cmos_read(unsigned char reg)
 {
@@ -390,6 +417,16 @@ static unsigned char keyboard_read(void) {
 //    return scancode;
 //}
 
+// RAM Information
+
+void print_memory_info(void) {
+    unsigned int ram_mb = detect_memory_mb();
+
+    print("RAM Detected -> ");
+    print_int(ram_mb);
+    print(" MB\n");
+}
+
 // command execution
 static void execute_command(void)
 {
@@ -407,7 +444,6 @@ static void execute_command(void)
         print("  time   - show current time\n");
         print("  info   - show system info\n");
         print("  calc   - calculator\n");
-        print("\n");
         print("  echo   - echo text\n");
         print("\n");
         print("  ata    - init ata\n");
@@ -416,10 +452,11 @@ static void execute_command(void)
         print("  read   - read from file\n");
         print("  del    - delete file\n");
         print("  stat   - show file information\n");
-        print("\n");
         print("  mkdir  - create a directory\n");
         print("  cd     - change a directory\n");
         print("  pwd    - print working directory path\n");
+		print("\n");
+		print("  ram    - Get information about your RAM\n");
     } else if (strcmp(input, "exit") == 0) {
         print("System halted.");
         update_cursor();
@@ -439,6 +476,13 @@ static void execute_command(void)
 
         print("Version > ");
         print(version);
+
+		print("\n");
+
+    	unsigned int ram_mb = detect_memory_mb();
+		print("RAM Size> ");
+		print_int(ram_mb);
+		print(" MB");
 
         print("\n");
 
@@ -507,6 +551,8 @@ static void execute_command(void)
 
     } else if (strcmp(input, "echo") == 0) {
         print("echo: Use echo <text> to print anything to the screen!\n");
+	} else if (strcmp(input, "ram") == 0) {
+		print_memory_info();
     } else {
         print("Unknown command.");
     }
@@ -663,10 +709,59 @@ void kernel_main(void)
 
 	// 3. Load Mini-Conhost
 
-    print("Q-J-R OS> ");
-    update_cursor();
+   print("Q-J-R OS> ");
+   update_cursor();
 
     while (1) {
         keyboard_process();
     }
 }
+
+
+// main kernel
+//void kernel_main(void)
+//{
+//    clear_screen();
+
+//    print("Q-J-R OS\n");
+//    print("Protected Mode kernel (IDT + IRQ enabled)\n");
+//    print("-----------------------------------------\n\n");
+
+	// 1. Load Interruption Table
+//	init_idt();
+
+	// 2. Enabling Hardware Interruption of CPU (Set Interrupt Flag)
+//	__asm__ __volatile__("sti");
+
+	// 3. Load Mini-Conhost
+
+//	vga_fill_rect(0, 5, 7, 4, VGA_WIDTH, VGA_HEIGHT, 'X', 0x4F);
+//	update_cursor();
+
+   // print("Q-J-R OS> ");
+   // update_cursor();
+//	clear_screen();
+
+    // 1. Детектимо RAM
+//    unsigned int ram_mb = detect_memory_mb();
+
+    // 2. Ініціалізуємо менеджери пам'яті
+//    pmm_init(ram_mb);
+//    kmalloc_init();
+
+//    print("Memory Management initialized!\n");
+
+    // 3. Тепер у ядрі можна динамічно виділяти пам'ять:
+//    char* my_buffer = (char*)kmalloc(128);
+    //my_buffer[0] = 'H';
+    //my_buffer[1] = 'i';
+    //my_buffer[2] = '\0';
+    //print(my_buffer);
+    //print("\n");
+
+    //kfree(my_buffer); // Звільняємо пам'ять
+
+    //while (1) {
+    //    keyboard_process();
+    //}
+//}

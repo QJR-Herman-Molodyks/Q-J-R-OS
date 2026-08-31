@@ -1146,17 +1146,6 @@ void ata_read(char* filename)
         return;
     }
 
-
-    unsigned int root_dir_start =
-        fat16.reserved_sectors +
-        ((unsigned int)fat16.fat_count *
-         fat16.sectors_per_fat);
-
-    unsigned int root_dir_sectors =
-        ((unsigned int)fat16.root_entries * 32 +
-         fat16.bytes_per_sector - 1) /
-        fat16.bytes_per_sector;
-
     unsigned char buffer[512];
 
     unsigned short file_cluster = 0;
@@ -1316,11 +1305,6 @@ void ata_read(char* filename)
         (((unsigned int)fat16.root_entries * 32 +
           fat16.bytes_per_sector - 1) /
          fat16.bytes_per_sector);
-
-    unsigned int first_sector =
-        data_start +
-        ((unsigned int)(file_cluster - 2) *
-         fat16.sectors_per_cluster);
 
     unsigned char data[512];
 

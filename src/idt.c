@@ -5,6 +5,8 @@
 #define IDT_ENTRIES 256
 #define KB_BUFFER_SIZE 256
 
+#include "include/io.h"
+
 static unsigned char kb_buffer[KB_BUFFER_SIZE];
 static int kb_head = 0;
 static int kb_tail = 0;
@@ -38,23 +40,6 @@ static struct idt_ptr   idtp;
 
 extern void print(const char* str);
 extern void put_char(char c);
-
-/*
- * Базові I/O порти (мають бути вище обробників)
- */
-static inline void outb(unsigned short port, unsigned char val) {
-    __asm__ volatile ("outb %0, %1" : : "a"(val), "Nd"(port));
-}
-
-static inline unsigned char inb(unsigned short port) {
-    unsigned char ret;
-    __asm__ volatile ("inb %1, %0" : "=a"(ret) : "Nd"(port));
-    return ret;
-}
-
-static inline void io_wait(void) {
-    __asm__ volatile ("outb %%al, $0x80" : : "a"(0));
-}
 
 /*
  * Черга клавіатури

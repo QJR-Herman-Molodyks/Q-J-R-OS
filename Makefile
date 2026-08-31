@@ -1,6 +1,10 @@
 .PHONY: build run clean run_nogr diagnose run_nod run_nogr
 
+TOTAL_STEPS = "04"
+
 build:
+	@echo "[01/$(TOTAL_STEPS)] Compiling a source"
+
 	nasm -f bin src/boot.asm -o build/boot.bin
 
 	i686-elf-gcc \
@@ -69,8 +73,24 @@ build:
 		   -c src/idt.c \
 		   -o build/idt.o
 
+	i686-elf-gcc \
+		   -m32 \
+		   -mgeneral-regs-only \
+		   -ffreestanding \
+		   -fno-pie \
+		   -fno-stack-protector \
+		   -fno-builtin \
+		   -nostdlib \
+		   -nodefaultlibs \
+		   -Wall \
+		   -Wextra \
+		   -c src/memory.c \
+		   -o build/memory.o
+
 	nasm -f elf32 src/kernel_entry.asm \
 		-o build/kernel_entry.o
+
+	echo "[02/$(TOTAL_STEPS)] Linking a source"
 
 	i686-elf-ld \
 		-m elf_i386 \
@@ -81,15 +101,23 @@ build:
 		build/calculator.o \
 		build/ata.o \
 		build/writer.o \
-		build/idt.o
+		build/idt.o \
+		build/memory.o
+
+	@echo "[02/$(TOTAL_STEPS)] Objcopying..."
+
 
 	i686-elf-objcopy \
 		-O binary \
 		build/kernel.elf \
 		build/kernel.bin
 
+	@echo "[03/$(TOTAL_STEPS)] Creating FAT16 drive..."
+
 	truncate -s 16M dsk/fat16.img
 	mkfs.fat -F 16 dsk/fat16.img
+
+	@echo "[04/$(TOTAL_STEPS)] Creating OS Image."
 
 	cat build/boot.bin build/kernel.bin > build/os.img
 
