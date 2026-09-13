@@ -5,6 +5,7 @@
 #define INPUT_SIZE 64
 
 #include "include/io.h"
+#include "include/stdint.h"
 
 // calculator
 extern void calculator(void);
@@ -53,9 +54,17 @@ int cursor_y = 0;
 
 int shift_pressed = 0;
 
+// drivers
+
+extern int serial_init(void);
+extern void serial_print(const char* str);
+extern void beep(void);
+extern void speaker_play_sound(uint32_t frequency);
+extern void speaker_mute(void);
+
 // os info
 static char name[] = "Q-J-R OS";
-static char version[] = "3.1";
+static char version[] = "3.2";
 
 // architecture
 int max_32bit = 2147483647;
@@ -427,6 +436,30 @@ void print_memory_info(void) {
     print(" MB\n");
 }
 
+// shutdown function
+
+void power_off(void) {
+    // 1. QEMU Method (standard port for a virtual ACPI-device)
+    // Sending Sleep Type 5 (S5 = Soft Off) and enabling bit SLP_EN
+    outw(0x604, 0x2000);
+
+    // 2. Method for olden versions of QEMU & Bochs
+    outw(0xB004, 0x2000);
+
+    // 3. Method for VirtualBox
+    outw(0x4004, 0x3400);
+
+    // 4. Trying disabling via extended port QEMU debug-exit
+    outb(0x501, 0x31);
+
+    // If the Hardware didn't support any port - stopping the processor FOREVER
+    print("\nSystem halted. It is now safe to turn off your computer.\n");
+    while (1) {
+        __asm__ volatile ("cli; hlt");
+    }
+}
+
+
 // command execution
 static void execute_command(void)
 {
@@ -445,6 +478,7 @@ static void execute_command(void)
         print("  info   - show system info\n");
         print("  calc   - calculator\n");
         print("  echo   - echo text\n");
+        print("  beep   - beep\n");
         print("\n");
         print("  ata    - init ata\n");
         print("  ls     - get list of files\n");
@@ -458,13 +492,10 @@ static void execute_command(void)
 		print("\n");
 		print("  ram    - Get information about your RAM\n");
     } else if (strcmp(input, "exit") == 0) {
-        print("System halted.");
+        print("Shutting down Q-J-R OS...\n");
         update_cursor();
 
-        while (1) {
-            __asm__ volatile ("cli");
-            __asm__ volatile ("hlt");
-        }
+        power_off();
     } else if (strcmp(input, "clear") == 0) {
         clear_screen();
     } else if (strcmp(input, "info") == 0) {
@@ -553,6 +584,9 @@ static void execute_command(void)
         print("echo: Use echo <text> to print anything to the screen!\n");
 	} else if (strcmp(input, "ram") == 0) {
 		print_memory_info();
+    } else if (strcmp(input, "beep") == 0) {
+        beep();
+        print("Beep!\n");
     } else {
         print("Unknown command.");
     }
@@ -701,13 +735,26 @@ void kernel_main(void)
     print("Protected Mode kernel (IDT + IRQ enabled)\n");
     print("-----------------------------------------\n\n");
 
-	// 1. Load Interruption Table
+    // 1. Serial port - at once for debugging
+    serial_print("[Q-J-R OS] Kernel booted, COM1 serial active.\n");
+
+	// 2. Load Interruption Table
 	init_idt();
 
-	// 2. Enabling Hardware Interruption of CPU (Set Interrupt Flag)
+	// 3. Enabling Hardware Interruption of CPU (Set Interrupt Flag)
 	__asm__ __volatile__("sti");
+    serial_print("[Q-J-R OS] IDT and interrupts configured.\n");
 
-	// 3. Load Mini-Conhost
+    // 4. Sound signal for OS start
+    beep();
+    serial_print("[Q-J-R OS] Beep!\n");
+
+    // 5. Memory initialization
+    unsigned int ram_mb = detect_memory_mb();
+    pmm_init(ram_mb);
+    kmalloc_init();
+
+	// 6. Load Mini-Conhost
 
    print("Q-J-R OS> ");
    update_cursor();

@@ -87,6 +87,55 @@ build:
 		   -c src/memory.c \
 		   -o build/memory.o
 
+
+	i686-elf-gcc \
+		   -m32 \
+		   -mgeneral-regs-only \
+		   -ffreestanding \
+		   -fno-pie \
+		   -fno-stack-protector \
+		   -fno-builtin \
+		   -nostdlib \
+		   -nodefaultlibs \
+		   -Wall \
+		   -Wextra \
+		   -c src/serial.c \
+		   -o build/serial.o
+
+
+	i686-elf-gcc \
+		   -m32 \
+		   -mgeneral-regs-only \
+		   -ffreestanding \
+		   -fno-pie \
+		   -fno-stack-protector \
+		   -fno-builtin \
+		   -nostdlib \
+		   -nodefaultlibs \
+		   -Wall \
+		   -Wextra \
+		   -c src/keyboard.c \
+		   -o build/keyboard.o
+
+
+	i686-elf-gcc \
+		   -m32 \
+		   -mgeneral-regs-only \
+		   -ffreestanding \
+		   -fno-pie \
+		   -fno-stack-protector \
+		   -fno-builtin \
+		   -nostdlib \
+		   -nodefaultlibs \
+		   -Wall \
+		   -Wextra \
+		   -c src/audio.c \
+		   -o build/audio.o
+
+
+
+
+
 	nasm -f elf32 src/kernel_entry.asm \
 		-o build/kernel_entry.o
 
@@ -102,7 +151,10 @@ build:
 		build/ata.o \
 		build/writer.o \
 		build/idt.o \
-		build/memory.o
+		build/memory.o \
+		build/serial.o \
+		build/keyboard.o \
+		build/audio.o
 
 	@echo "[02/$(TOTAL_STEPS)] Objcopying..."
 
@@ -129,8 +181,11 @@ diagnose:
 
 run:
 	qemu-system-i386 \
+#		-audiodev coreaudio,id=snd0 \
+#		-machine pcspk-audiodev=snd0 \
         -drive format=raw,file=build/os.img \
         -drive format=raw,file=dsk/fat16.img \
+        -serial stdio \
 		-boot c
 
 run_nod:

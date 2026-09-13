@@ -41,21 +41,23 @@ static struct idt_ptr   idtp;
 extern void print(const char* str);
 extern void put_char(char c);
 
+extern void keyboard_handler_main(void);
+
 /*
  * Черга клавіатури
  */
-int keyboard_has_char(void) {
-    return kb_head != kb_tail;
-}
+// int keyboard_has_char(void) {
+//     return kb_head != kb_tail;
+// }
 
-unsigned char keyboard_pop_scancode(void) {
-    while (!keyboard_has_char()) {
-        __asm__ volatile ("hlt"); // CPU спить, доки не спрацює IRQ1!
-    }
-    unsigned char sc = kb_buffer[kb_tail];
-    kb_tail = (kb_tail + 1) % KB_BUFFER_SIZE;
-    return sc;
-}
+// unsigned char keyboard_pop_scancode(void) {
+//     while (!keyboard_has_char()) {
+//         __asm__ volatile ("hlt"); // CPU спить, доки не спрацює IRQ1!
+//     }
+//     unsigned char sc = kb_buffer[kb_tail];
+//     kb_tail = (kb_tail + 1) % KB_BUFFER_SIZE;
+//     return sc;
+// }
 
 /*
  * Ремапінг PIC
@@ -117,18 +119,19 @@ void irq0_handler(struct interrupt_frame* frame) {
 // IRQ 1: Keyboard (0x21)
 __attribute__((interrupt))
 void irq1_handler(struct interrupt_frame* frame) {
-    (void)frame;
+//    (void)frame;
 
-    unsigned char scancode = inb(0x60);
+//    unsigned char scancode = inb(0x60);
 
     // Додаємо сканкод у чергу
-    int next_head = (kb_head + 1) % KB_BUFFER_SIZE;
-    if (next_head != kb_tail) {
-        kb_buffer[kb_head] = scancode;
-        kb_head = next_head;
-    }
+//    int next_head = (kb_head + 1) % KB_BUFFER_SIZE;
+//    if (next_head != kb_tail) {
+//        kb_buffer[kb_head] = scancode;
+//        kb_head = next_head;
+//    }
 
-    outb(0x20, 0x20); // EOI
+//    outb(0x20, 0x20); // EOI
+    keyboard_handler_main();
 }
 
 // Initialization

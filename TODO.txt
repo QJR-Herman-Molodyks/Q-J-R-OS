@@ -1,7 +1,7 @@
 
 1. Filesystem
-    1.1. Add possibility to create directories and delete directories
-    1.2. Possibility to change directories
+    1.1. Add possibility to create directories and delete directories [+-]
+    1.2. Possibility to change directories [+]
     1.3. Add feature to copy, move, rename
 
 2. Writer
@@ -15,4 +15,3 @@
     3.1. Filesystem
         3.1.1. Add possibility to format the disk
         3.1.2. Add possibility to change (switch) the drive/partitions
-

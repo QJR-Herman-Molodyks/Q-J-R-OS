@@ -1,20 +1,30 @@
-# Official Open-Source Q-J-R OS v3.1 (Free Software)
+# Official Open-Source Q-J-R OS v3.2 (Free Software)
 ## GNU Public License v3.0 (GPL-3.0)!
 
 ### Source Files:   
 
 1. ata.c
-2. boot.asm
-3. calculator.c
-4. kernel.c
-5. kernel_entry.asm
-6. writer.c   
-7. idt.c    
-8. memory.c
-9. writer.c
+2. audio.c   
+3. boot.asm
+4. calculator.c
+5. kernel.c
+6. kernel_entry.asm
+7. keyboard.c   
+8. writer.c   
+9. idt.c    
+10. memory.c   
+11. serial.c   
+12. writer.c     
 
-10. linker.ld
-11. Makefile
+13. linker.ld
+14. Makefile
+
+### Includes
+
+1. io.h
+2. stdbool.h
+3. stddef.h
+4. stdint.h
 
 ### Features:
 
@@ -50,6 +60,10 @@
 #### Hardware
 
 18. See RAM information - ram
+
+#### Sounds
+
+19. BEEP! - beep
 
 ### Compilation
 
