@@ -60,32 +60,32 @@ build:
 		-o build/writer.o
 
 	i686-elf-gcc \
-		   -m32 \
-		   -mgeneral-regs-only \
-		   -ffreestanding \
-		   -fno-pie \
-		   -fno-stack-protector \
-		   -fno-builtin \
-		   -nostdlib \
-		   -nodefaultlibs \
-		   -Wall \
-		   -Wextra \
-		   -c src/idt.c \
-		   -o build/idt.o
+		-m32 \
+	  	-mgeneral-regs-only \
+	  	-ffreestanding \
+	  	-fno-pie \
+	  	-fno-stack-protector \
+		-fno-builtin \
+		-nostdlib \
+		-nodefaultlibs \
+		-Wall \
+		-Wextra \
+		-c src/idt.c \
+		-o build/idt.o
 
 	i686-elf-gcc \
-		   -m32 \
-		   -mgeneral-regs-only \
-		   -ffreestanding \
-		   -fno-pie \
-		   -fno-stack-protector \
-		   -fno-builtin \
-		   -nostdlib \
-		   -nodefaultlibs \
-		   -Wall \
-		   -Wextra \
-		   -c src/memory.c \
-		   -o build/memory.o
+		-m32 \
+		-mgeneral-regs-only \
+		-ffreestanding \
+		-fno-pie \
+		-fno-stack-protector \
+		-fno-builtin \
+		-nostdlib \
+		-nodefaultlibs \
+		-Wall \
+		-Wextra \
+		-c src/memory.c \
+		-o build/memory.o
 
 
 	i686-elf-gcc \
@@ -132,8 +132,33 @@ build:
 		   -c src/audio.c \
 		   -o build/audio.o
 
+	i686-elf-gcc \
+		   -m32 \
+		   -mgeneral-regs-only \
+		   -ffreestanding \
+		   -fno-pie \
+		   -fno-stack-protector \
+		   -fno-builtin \
+		   -nostdlib \
+		   -nodefaultlibs \
+		   -Wall \
+		   -Wextra \
+		   -c src/acpi.c \
+		   -o build/acpi.o
 
-
+	i686-elf-gcc \
+		   -m32 \
+		   -mgeneral-regs-only \
+		   -ffreestanding \
+		   -fno-pie \
+		   -fno-stack-protector \
+		   -fno-builtin \
+		   -nostdlib \
+		   -nodefaultlibs \
+		   -Wall \
+		   -Wextra \
+		   -c src/sound.c \
+		   -o build/sound.o
 
 
 	nasm -f elf32 src/kernel_entry.asm \
@@ -154,7 +179,9 @@ build:
 		build/memory.o \
 		build/serial.o \
 		build/keyboard.o \
-		build/audio.o
+		build/audio.o \
+		build/acpi.o \
+		build/sound.o
 
 	@echo "[02/$(TOTAL_STEPS)] Objcopying..."
 
@@ -171,9 +198,13 @@ build:
 
 	@echo "[04/$(TOTAL_STEPS)] Creating OS Image."
 
-	cat build/boot.bin build/kernel.bin > build/os.img
+	 cat build/boot.bin build/kernel.bin > build/os.img
+#	os.img: build/boot.bin build/kernel.bin
+#		cat build/boot.bin build/kernel.bin > os.img
+#		truncate -s 64K os.img
 
-	truncate -s 65536 build/os.img
+	#truncate -s 131072 build/os.img
+	truncate -s 128K build/os.img
 
 diagnose:
 	ls -lh build/kernel.bin
@@ -181,12 +212,10 @@ diagnose:
 
 run:
 	qemu-system-i386 \
-#		-audiodev coreaudio,id=snd0 \
-#		-machine pcspk-audiodev=snd0 \
-        -drive format=raw,file=build/os.img \
-        -drive format=raw,file=dsk/fat16.img \
-        -serial stdio \
-		-boot c
+		-drive file=build/os.img,format=raw,index=0,media=disk \
+		-drive file=dsk/fat16.img,format=raw,index=1,media=disk \
+		-serial stdio \
+		-boot order=c
 
 run_nod:
 	qemu-system-i386 -drive format=raw,file=build/os.img

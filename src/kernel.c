@@ -62,9 +62,13 @@ extern void beep(void);
 extern void speaker_play_sound(uint32_t frequency);
 extern void speaker_mute(void);
 
+// ACPI power off
+
+extern void acpi_power_off(void);
+
 // os info
 static char name[] = "Q-J-R OS";
-static char version[] = "3.2";
+static char version[] = "3.3";
 
 // architecture
 int max_32bit = 2147483647;
@@ -439,20 +443,24 @@ void print_memory_info(void) {
 // shutdown function
 
 void power_off(void) {
-    // 1. QEMU Method (standard port for a virtual ACPI-device)
+    // 1. If found port in the Motherboard - sending command in real chipset (ACPI Shutdown)
+    acpi_power_off();
+
+    // (Reserved fallbacl ports (emulators, hypervisors and VMs))
+    // 2. QEMU Method (standard port for a virtual ACPI-device)
     // Sending Sleep Type 5 (S5 = Soft Off) and enabling bit SLP_EN
     outw(0x604, 0x2000);
 
-    // 2. Method for olden versions of QEMU & Bochs
+    // 3. Method for older versions of QEMU & Bochs
     outw(0xB004, 0x2000);
 
-    // 3. Method for VirtualBox
+    // 4. Method for VirtualBox
     outw(0x4004, 0x3400);
 
-    // 4. Trying disabling via extended port QEMU debug-exit
+    // 5. Trying disabling via extended port QEMU debug-exit
     outb(0x501, 0x31);
 
-    // If the Hardware didn't support any port - stopping the processor FOREVER
+    // 6. If the Hardware didn't support any port - stopping the processor FOREVER
     print("\nSystem halted. It is now safe to turn off your computer.\n");
     while (1) {
         __asm__ volatile ("cli; hlt");
