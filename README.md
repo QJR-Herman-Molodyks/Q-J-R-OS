@@ -99,7 +99,7 @@
 **OS**             : Q-J-R OS   
 **Kernel Type**    : Monolithic Kernel (Not fully)       
 
-**Disk Image Size**: 65536 KB   
+**Disk Image Size**: 131072 B   
 **Disk Image**     : .img   
 
 **Virtual Machine**: QEMU (i386)
