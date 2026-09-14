@@ -1,6 +1,8 @@
 # Official Open-Source Q-J-R OS v3.3.1 (Free Software)
 ## GNU Public License v3.0 (GPL-3.0)!
 
+##### (That's just a reminder that with every new file comes an update to the Makefile!)   
+
 ### Source Files:   
 
 1. acpi.c
@@ -15,11 +17,12 @@
 10. idt.c    
 11. memory.c   
 12. serial.c
-13. sound.c   
-14. writer.c
+13. sound.c
+14. timer.c   
+15. writer.c
 
-15. linker.ld
-16. Makefile
+16. linker.ld
+17. Makefile
 
 ### Includes
 
@@ -73,10 +76,10 @@
 
 #### Tools (Crosscompilation):
 
-1. i686-elf-binutils
-    1.1. i686-elf-gcc
-    1.2. i686-elf-ld
-    1.3. i686-elf-objcopy
+1. i686-elf-binutils   
+    1.1. i686-elf-gcc   
+    1.2. i686-elf-ld     
+    1.3. i686-elf-objcopy   
 
 2. nasm   
 3. mkfs.fat   
@@ -93,8 +96,6 @@
 **ATA Support**    : FAT16 ATA Chain Support   
 **SATA Support**   : No (temporary)   
 **Filesystem**     : FAT16   
-
-**Floopy**         : No   
 
 **OS**             : Q-J-R OS   
 **Kernel Type**    : Monolithic Kernel (Not fully)       
