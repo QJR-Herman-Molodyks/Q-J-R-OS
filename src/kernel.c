@@ -66,9 +66,17 @@ extern void speaker_mute(void);
 
 extern void acpi_power_off(void);
 
+// sound
+
+extern void sound_boot(void);
+
 // os info
 static char name[] = "Q-J-R OS";
-static char version[] = "3.3";
+static char version[] = "3.3.1";
+
+// timer
+
+extern void sleep(int seconds);
 
 // architecture
 int max_32bit = 2147483647;
@@ -762,7 +770,10 @@ void kernel_main(void)
     pmm_init(ram_mb);
     kmalloc_init();
 
-	// 6. Load Mini-Conhost
+    // 6. Play boot sound
+    sound_boot();
+
+	// 7. Load Mini-Conhost
 
    print("Q-J-R OS> ");
    update_cursor();

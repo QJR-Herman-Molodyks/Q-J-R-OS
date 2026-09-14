@@ -160,6 +160,20 @@ build:
 		   -c src/sound.c \
 		   -o build/sound.o
 
+	i686-elf-gcc \
+		   -m32 \
+		   -mgeneral-regs-only \
+		   -ffreestanding \
+		   -fno-pie \
+		   -fno-stack-protector \
+		   -fno-builtin \
+		   -nostdlib \
+		   -nodefaultlibs \
+		   -Wall \
+		   -Wextra \
+		   -c src/timer.c \
+		   -o build/timer.o
+
 
 	nasm -f elf32 src/kernel_entry.asm \
 		-o build/kernel_entry.o
@@ -181,7 +195,8 @@ build:
 		build/keyboard.o \
 		build/audio.o \
 		build/acpi.o \
-		build/sound.o
+		build/sound.o \
+		build/timer.o
 
 	@echo "[02/$(TOTAL_STEPS)] Objcopying..."
 
