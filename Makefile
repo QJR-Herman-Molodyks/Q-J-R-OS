@@ -224,9 +224,18 @@ build:
 diagnose:
 	ls -lh build/kernel.bin
 	wc -c build/kernel.bin
+#
+#run:
+#	qemu-system-i386 \
+#		-drive file=build/os.img,format=raw,index=0,media=disk \
+#		-drive file=dsk/fat16.img,format=raw,index=1,media=disk \
+#		-serial stdio \
+#		-boot order=c
 
 run:
 	qemu-system-i386 \
+		-audiodev coreaudio,id=snd0 \
+		-machine pc,pcspk-audiodev=snd0 \
 		-drive file=build/os.img,format=raw,index=0,media=disk \
 		-drive file=dsk/fat16.img,format=raw,index=1,media=disk \
 		-serial stdio \

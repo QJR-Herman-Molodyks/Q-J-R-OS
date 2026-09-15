@@ -7,9 +7,11 @@
 
 #include "include/io.h"
 
-static unsigned char kb_buffer[KB_BUFFER_SIZE];
-static int kb_head = 0;
-static int kb_tail = 0;
+// static unsigned char kb_buffer[KB_BUFFER_SIZE];
+// static int kb_head = 0;
+// static int kb_tail = 0;
+
+extern void timer_handler_main(void);
 
 // Writing structure of IDT
 struct idt_entry {
@@ -113,7 +115,8 @@ void isr13_handler(struct interrupt_frame* frame, unsigned int error_code) {
 __attribute__((interrupt))
 void irq0_handler(struct interrupt_frame* frame) {
     (void)frame;
-    outb(0x20, 0x20); // EOI
+    // outb(0x20, 0x20); // EOI
+    timer_handler_main();
 }
 
 // IRQ 1: Keyboard (0x21)

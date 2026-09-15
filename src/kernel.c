@@ -69,14 +69,16 @@ extern void acpi_power_off(void);
 // sound
 
 extern void sound_boot(void);
+extern void sound_shutdown(void);
 
 // os info
 static char name[] = "Q-J-R OS";
-static char version[] = "3.3.1";
+static char version[] = "3.3.2";
 
 // timer
 
 extern void sleep(int seconds);
+extern void timer_init(void);
 
 // architecture
 int max_32bit = 2147483647;
@@ -509,6 +511,7 @@ static void execute_command(void)
 		print("  ram    - Get information about your RAM\n");
     } else if (strcmp(input, "exit") == 0) {
         print("Shutting down Q-J-R OS...\n");
+        sound_shutdown();
         update_cursor();
 
         power_off();
@@ -765,13 +768,16 @@ void kernel_main(void)
     beep();
     serial_print("[Q-J-R OS] Beep!\n");
 
-    // 5. Memory initialization
+    // 5. Memory & Timer initialization
     unsigned int ram_mb = detect_memory_mb();
     pmm_init(ram_mb);
     kmalloc_init();
 
+    timer_init();
+
     // 6. Play boot sound
     sound_boot();
+    update_cursor();
 
 	// 7. Load Mini-Conhost
 
