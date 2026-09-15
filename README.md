@@ -1,4 +1,4 @@
-# Official Open-Source Q-J-R OS v3.3.1 (Free Software)
+# Official Open-Source Q-J-R OS v3.3.2 (Free Software)
 ## GNU Public License v3.0 (GPL-3.0)!
 
 ##### (That's just a reminder that with every new component comes an update to the Makefile!)
