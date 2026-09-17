@@ -39,7 +39,7 @@
 
 1. Help Panel - help
 2. Clear Screen - clear
-3. Shutdown (halting) - exit
+3. Shutdown - exit
 4. System Reboot - reboot
 5. Information View - info
 6. Calculator - calc
